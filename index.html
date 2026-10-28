@@ -146,9 +146,17 @@ pre.report{font:12px/1.5 var(--mono);margin:0;overflow:auto;max-height:70vh;whit
 .demo{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:6px 12px;font-size:.82rem;flex:none}
 .demo p{margin:0}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-details.help{font-size:.8rem;color:var(--muted)}
-details.help summary{cursor:pointer;color:var(--ink);font-weight:500}
-details.help p{margin:.5em 0}
+/* "How it works" pop-up */
+dialog.help{width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 48px);padding:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);box-shadow:0 18px 50px rgba(0,0,0,.25)}
+dialog.help::backdrop{background:rgba(20,24,30,.45)}
+dialog.help[open]{display:flex;flex-direction:column}
+dialog.help header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);flex:none}
+dialog.help header h2{margin:0;font-size:1.08rem}
+dialog.help .body{overflow-y:auto;padding:6px 22px 18px;font-size:.9rem;line-height:1.55}
+dialog.help h3{font-size:.98rem;margin:16px 0 4px}
+dialog.help p{margin:.4em 0}
+dialog.help ol{margin:.4em 0;padding-left:1.4em}
+dialog.help .eq{font-family:var(--mono);font-size:.84rem;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:6px 10px;margin:.5em 0;overflow-x:auto;white-space:pre}
 </style>
 </head>
 <body>
@@ -204,14 +212,7 @@ details.help p{margin:.5em 0}
   </fieldset>
 
   <fieldset>
-    <details class="help">
-      <summary>How it works</summary>
-      <p>The model A(T) = A<sub>b</sub>·Q<sub>10</sub><sup>(T−T<sub>b</sub>)/10</sup> is fitted by non-linear least squares on the activity itself (Levenberg–Marquardt), starting from a straight-line regression of ln(activity) on temperature. Q<sub>10</sub> &gt; 1 means activity rises with temperature.</p>
-      <p>The ± values are the square roots of the diagonal of s²(JᵀJ)⁻¹ with s² = SSE/(n−2), the same definition as SciPy’s curve_fit. The base temperature only changes A<sub>b</sub> and its error; Q<sub>10</sub>, R² and the fitted curve stay the same.</p>
-      <p>The Arrhenius regression fits ln(activity) against 1000/T (T in kelvin) with a straight line and reports E<sub>a</sub> = −slope × 1000 × R.</p>
-      <p>Axis scales: tick Temperature and/or Activity below the plot and enter Min and Max; press Enter, click the arrows or move to another field to apply. Temperature 0–100 °C (step 0.5 °C); activity 0 to 100 × the largest activity in the data, with the step set to the data maximum / 50 rounded to 1, 2 or 5 × 10ⁿ.</p>
-      <p>All calculations run in your browser. The data you enter is not sent or stored.</p>
-    </details>
+    <button type="button" id="btn-help">How it works</button>
   </fieldset>
 </aside>
 
@@ -256,6 +257,50 @@ details.help p{margin:.5em 0}
   </div>
 </main>
 </div>
+
+<dialog class="help" id="help" aria-labelledby="help-title">
+  <header><h2 id="help-title">How this calculator works</h2><button type="button" id="help-close">Close</button></header>
+  <div class="body">
+    <h3>What Q<sub>10</sub> means</h3>
+    <p>Q<sub>10</sub> is the factor by which a rate changes for a 10 °C rise in temperature. From rates R<sub>1</sub> and R<sub>2</sub> measured at temperatures T<sub>1</sub> and T<sub>2</sub>:</p>
+    <div class="eq">Q10 = (R2 / R1) ^ (10 / (T2 − T1))</div>
+    <p>Typical enzyme-catalysed reactions have Q<sub>10</sub> of about 2 to 3. Q<sub>10</sub> &gt; 1 means the activity rises with temperature, Q<sub>10</sub> = 1 means no temperature dependence, and Q<sub>10</sub> &lt; 1 means the activity falls as temperature rises.</p>
+
+    <h3>The model that is fitted</h3>
+    <div class="eq">A(T)    = A_b · Q10 ^ ((T − T_b) / 10)            (1)
+ln A(T) = ln A_b + ((T − T_b) / 10) · ln Q10      (2)</div>
+    <p>A<sub>b</sub> is the activity at the base temperature T<sub>b</sub>. The base temperature only decides at which temperature A<sub>b</sub> is reported: Q<sub>10</sub>, its standard error, R² and the fitted curve are the same whatever base you choose.</p>
+
+    <h3>The three plots</h3>
+    <p><strong>Activity</strong>: activity against temperature, with the fitted curve from model (1).<br>
+    <strong>ln(Activity)</strong>: the logarithm of the activity against temperature; model (2) is a straight line here.<br>
+    <strong>Arrhenius</strong>: ln(activity) against 1000/T, with T in kelvin. The optional solid grey line is the straight-line regression of ln(activity) on 1000/T, which gives the activation energy E<sub>a</sub> = −slope × 1000 × R (R = 8.314 J mol⁻¹ K⁻¹).</p>
+    <p>Red points are used in the fit, green points are outside the chosen temperature range, and the dashed blue line is the fitted Q<sub>10</sub> curve.</p>
+
+    <h3>How the fit is calculated</h3>
+    <p>Non-linear least squares on the activity itself (not its logarithm), minimising SSE = Σ (A<sub>i</sub> − Â<sub>i</sub>)², with the Levenberg–Marquardt method. Starting values come from a straight-line regression of ln(activity) on temperature.</p>
+    <p>The ± values are the square roots of the diagonal of s² (JᵀJ)⁻¹ with s² = SSE / (n − 2), the same definition as SciPy’s curve_fit. R² = 1 − SSE / SST.</p>
+
+    <h3>Temperature range for the fit</h3>
+    <p>Tick “Use only data within a temperature range” and set Low and High, or drag across any plot after calculating. Double-click a plot or click Use all data to go back to all data. The axis scales stay those of the all-data fit, so they do not jump when the range changes.</p>
+
+    <h3>Axis scales</h3>
+    <p>The axes are scaled automatically. To set them yourself, tick Temperature and/or Activity below the plot and enter Min and Max; press Enter, click the arrows or move to another field to apply. Untick to return to automatic scaling.</p>
+    <p><strong>Temperature</strong>: 0–100 °C in steps of 0.5 °C; the Arrhenius x axis is converted to 1000/T.<br>
+    <strong>Activity</strong>: 0 to 100 × the largest activity in the data. The step of the arrows is set from the data: the data maximum / 50, rounded to 1, 2 or 5 × 10ⁿ. The ln(Activity) and Arrhenius y axes are converted to ln; with Min = 0 their lower limit stays automatic.</p>
+
+    <h3>How to use it</h3>
+    <ol>
+      <li>Click Clear, then enter one temperature (°C) and activity pair per line, or use Load CSV… (temperature in column 1, activity in column 2). Enter the activity unit if you like.</li>
+      <li>Choose the base temperature and click Calculate (Ctrl+Enter).</li>
+      <li>Optionally restrict the temperature range and set the axis scales.</li>
+      <li>Save figure saves the three plots stacked in one PNG or SVG image; Save report saves the results text.</li>
+    </ol>
+
+    <h3>Privacy</h3>
+    <p>All calculations run in your browser. The data you enter is not sent or stored.</p>
+  </div>
+</dialog>
 
 <script>
 "use strict";
@@ -797,6 +842,11 @@ $("btn-run").addEventListener("click", () => run());
 $("btn-example").addEventListener("click", () => { els.data.value = EXAMPLE_DATA; els.title.value = "Example"; els.unit.value = EXAMPLE_UNIT; setStatus("Example data loaded."); });
 $("btn-clear").addEventListener("click", clearAll);
 $("btn-all").addEventListener("click", useAllData);
+// "How it works" pop-up: Close button, Esc (built in) or a click outside the window closes it.
+const helpDlg = $("help");
+$("btn-help").addEventListener("click", () => { if (helpDlg.showModal) helpDlg.showModal(); else helpDlg.setAttribute("open", ""); $("help-close").focus(); });
+$("help-close").addEventListener("click", () => helpDlg.close ? helpDlg.close() : helpDlg.removeAttribute("open"));
+helpDlg.addEventListener("click", e => { if (e.target === helpDlg) helpDlg.close(); });
 $("btn-csv").addEventListener("click", () => $("file").click());
 $("file").addEventListener("change", e => {
   const f = e.target.files[0]; if (!f) return;
