@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<!--
+================================================================================
+ Q10 calculator for temperature vs. activity - standalone HTML version
+================================================================================
+ A port of the Python/Tkinter program (q10_temperature_vs_activity.py) to a single
+ HTML file that runs entirely in the browser. Open the file in a browser; no
+ server or installation is needed. Without an internet connection the page
+ falls back to system fonts; all calculations run offline.
+
+ Model:   A(T) = A_b * Q10 ^ ((T - T_b) / 10)
+          ln A(T) = ln A_b + ((T - T_b) / 10) * ln Q10
+ Fit:     non-linear least squares on the activity itself, SSE = sum (A_i - A_hat_i)^2
+          (Levenberg-Marquardt on ln A_b and ln Q10; same minimum as scipy curve_fit).
+          Starting values from a linear regression of ln(A) on T.
+          SE: Cov = s^2 (J^T J)^-1, s^2 = SSE / (n - 2)   (curve_fit, absolute_sigma=False)
+          R^2 = 1 - SSE / SST
+ Arrhenius regression: ln A = intercept + slope * 1000/T_K,  Ea = -slope * 1000 * R
+
+ Axis scales (manual, "Axis scales" panel):
+   Temperature : 0-100 °C, step 0.5 °C (Arrhenius x axis converted to 1000/T)
+   Activity    : 0 to 100 x the largest activity in the data; the step of the
+                 number-field arrows is (data maximum / 50) rounded to 1, 2 or
+                 5 x 10^k. The ln(Activity) and Arrhenius y axes are converted
+                 to ln; with Min = 0 their lower limit stays automatic.
+   Values are applied when you press Enter, click the arrows or leave the field.
+
+ Fit range: tick "Use only data within a temperature range" and set Low/High, or
+   drag across any plot after calculating (double-click a plot or click
+   "Use all data" to go back). The axis scales stay those of the all-data fit.
+
+ Privacy: everything runs in your browser. No data is sent or stored.
+================================================================================
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Q10 calculator: temperature vs. activity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme: light;
+  --bg:#F1F2F4; --panel:#FFFFFF; --ink:#1B1F24; --muted:#5F6670; --line:#D7DBE0;
+  --field:#F7F8FA; --accent:#0E6B66; --accent-ink:#FFFFFF;
+  --used:#FF0000; --excluded:#5DC85D; --fit:#2B8CD6; --arr:#6B7079; --grid:#E6E9ED; --axis:#6E7580;
+  --band:#6F8BAE; --err-bg:#FBE9E5; --err:#962818;
+  --sans:"IBM Plex Sans","Segoe UI",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg:#131416; --panel:#1C1E21; --ink:#E7E9EC; --muted:#9BA1A9; --line:#30343A;
+    --field:#16181B; --accent:#5CC2B9; --accent-ink:#08201D;
+    --used:#FF0000; --excluded:#4CB85A; --fit:#6CB8F0; --arr:#A7ADB7; --grid:#2A2E33; --axis:#8C929A;
+    --band:#8FA7C6; --err-bg:#3B1E19; --err:#FFB3A3;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#131416; --panel:#1C1E21; --ink:#E7E9EC; --muted:#9BA1A9; --line:#30343A;
+  --field:#16181B; --accent:#5CC2B9; --accent-ink:#08201D;
+  --used:#FF0000; --excluded:#4CB85A; --fit:#6CB8F0; --arr:#A7ADB7; --grid:#2A2E33; --axis:#8C929A;
+  --band:#8FA7C6; --err-bg:#3B1E19; --err:#FFB3A3;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
+.app{display:grid;grid-template-columns:minmax(310px,370px) 1fr;gap:20px;max-width:1420px;margin:0 auto;padding:20px}
+@media (max-width:900px){.app{grid-template-columns:1fr;padding:12px;gap:12px}}
+h1{font-size:1.35rem;line-height:1.2;margin:0 0 2px;font-weight:700}
+.sub{color:var(--muted);margin:0 0 16px;font-size:.88rem}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+fieldset{border:0;border-top:1px solid var(--line);margin:14px 0 0;padding:12px 0 0;min-width:0}
+fieldset:first-of-type{border-top:0;margin-top:0;padding-top:0}
+legend{font-weight:600;font-size:.92rem;padding:0;margin-bottom:6px}
+label{font-size:.88rem}
+.hint{color:var(--muted);font-size:.8rem;margin:0 0 6px}
+input[type=text],input[type=number],select,textarea{
+  width:100%;font:inherit;color:var(--ink);background:var(--field);
+  border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+input[type=number]{width:7.5em}
+textarea{font:13px/1.55 var(--mono);resize:vertical;min-height:160px;height:260px;white-space:pre;overflow:auto}
+input:disabled,select:disabled{opacity:.45}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row + .row{margin-top:8px}
+.check{display:flex;gap:8px;align-items:center}
+.axis + .axis{margin-top:12px}
+.axis .row{margin-top:6px}
+.axis .hint{margin:4px 0 0}
+button{font:inherit;font-size:.88rem;border-radius:6px;border:1px solid var(--line);background:var(--field);color:var(--ink);padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--axis)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;width:100%;padding:10px;font-size:.95rem}
+button.primary:hover{filter:brightness(1.08)}
+kbd{font:11px var(--mono);opacity:.75;margin-left:4px}
+.status{margin-top:10px;font-size:.84rem;color:var(--muted);min-height:1.3em}
+.status.error{background:var(--err-bg);color:var(--err);padding:8px 10px;border-radius:6px}
+.out{display:flex;flex-direction:column;gap:14px;min-width:0}
+.readout{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden}
+.readout div{padding:12px 14px;border-left:1px solid var(--line);min-width:0}
+.readout div:first-child{border-left:0}
+.readout dt{font-size:.8rem;color:var(--muted)}
+.readout dd{margin:0;font-size:1.4rem;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.25;overflow-wrap:anywhere}
+.readout dd small{font-size:.78rem;font-weight:400;color:var(--muted);margin-left:4px}
+@media (max-width:760px){.readout{grid-template-columns:1fr 1fr}.readout div{border-left:0;border-top:1px solid var(--line)}.readout div:first-child{grid-column:1/-1;border-top:0}.readout div:nth-child(odd):not(:first-child){border-left:1px solid var(--line)}}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:8px 14px;color:var(--muted);font-weight:500;white-space:nowrap}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.view{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+@media (max-width:620px){.view{padding:10px}}
+.figtitle{text-align:center;font-weight:600;font-size:1.15rem;margin:0}
+.figsum{text-align:center;color:var(--muted);font-size:.86rem;margin:2px 0 8px;font-variant-numeric:tabular-nums}
+.plot svg{width:100%;height:auto;display:block;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.plot svg.selecting{cursor:ew-resize}
+.plothint{text-align:center;color:var(--muted);font-size:.8rem;margin:6px 0 0}
+.empty{display:grid;place-items:center;min-height:380px;color:var(--muted);text-align:center;font-size:.92rem}
+.empty p{max-width:34ch;margin:0}
+pre.report{font:12.5px/1.55 var(--mono);margin:0;overflow:auto;max-height:70vh;white-space:pre}
+.saves{display:flex;gap:8px;flex-wrap:wrap}
+[hidden]{display:none!important}
+.demo{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;font-size:.9rem}
+.demo p{margin:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+details.help{font-size:.86rem;color:var(--muted)}
+details.help summary{cursor:pointer;color:var(--ink);font-weight:500}
+details.help p{margin:.5em 0}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="panel" aria-label="Inputs">
+  <h1>Q<sub>10</sub> calculator: temperature vs. activity</h1>
+  <p class="sub">Fits A(T) = A<sub>b</sub> · Q<sub>10</sub><sup>(T − T<sub>b</sub>)/10</sup> to temperature and activity data.</p>
+
+  <fieldset>
+    <legend><label for="title">Plot title</label></legend>
+    <input id="title" type="text" placeholder="Optional">
+  </fieldset>
+
+  <fieldset>
+    <legend><label for="data">Data, one pair per line</label></legend>
+    <p class="hint">Temperature (°C) and activity, separated by comma, space or tab. A header line and lines starting with # are skipped.</p>
+    <textarea id="data" spellcheck="false"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button type="button" id="btn-csv">Load CSV…</button>
+      <button type="button" id="btn-example">Load example</button>
+      <button type="button" id="btn-clear">Clear</button>
+      <input type="file" id="file" accept=".csv,.tsv,.txt,text/csv,text/plain" class="sr" tabindex="-1">
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label for="unit" style="white-space:nowrap">Activity unit</label>
+      <input id="unit" type="text" placeholder="e.g. U/mg, RLU, a.u." style="flex:1;width:auto">
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Temperature range for the fit</legend>
+    <label class="check"><input type="checkbox" id="use-range"> Use only data within a temperature range</label>
+    <div class="row" style="margin-top:8px">
+      <label for="low">Low</label><input id="low" type="number" step="0.1" value="15">
+      <label for="high">High</label><input id="high" type="number" step="0.1" value="35"><span>°C</span>
+      <button type="button" id="btn-all">Use all data</button>
+    </div>
+    <p class="hint" style="margin-top:6px">After calculating, you can also drag across any plot to choose the range; double-click a plot to use all data again.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend><label for="base">Base temperature</label></legend>
+    <select id="base"></select>
+    <div class="row" style="margin-top:8px">
+      <label for="custom">Custom value</label><input id="custom" type="number" step="0.1" value="25"><span>°C</span>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Axis scales</legend>
+    <p class="hint">Tick an axis to set its range. Press Enter, click the arrows or move to another field to apply; untick to return to automatic scaling.</p>
+    <div class="axis">
+      <label class="check"><input type="checkbox" id="ax-t"> Temperature</label>
+      <div class="row">
+        <label for="tmin">Min</label><input id="tmin" type="number" min="0" max="100" step="0.5">
+        <label for="tmax">Max</label><input id="tmax" type="number" min="0" max="100" step="0.5"><span>°C</span>
+      </div>
+      <p class="hint">Range 0–100 °C, step 0.5 °C. The Arrhenius x axis is converted to 1000/T.</p>
+    </div>
+    <div class="axis">
+      <label class="check"><input type="checkbox" id="ax-a"> Activity</label>
+      <div class="row">
+        <label for="amin">Min</label><input id="amin" type="number" min="0">
+        <label for="amax">Max</label><input id="amax" type="number" min="0">
+      </div>
+      <p class="hint" id="a-hint">Range and step are set from the data after calculating.</p>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <label class="check"><input type="checkbox" id="show-arr" checked> Show Arrhenius regression line on the Arrhenius plot</label>
+    <label class="check" style="margin-top:4px"><input type="checkbox" id="tabdelim"> Also show tab-delimited data in the report</label>
+    <div style="margin-top:12px"><button type="button" class="primary" id="btn-run">Calculate <kbd>Ctrl+Enter</kbd></button></div>
+    <div class="status" id="status" role="status" aria-live="polite">Ready.</div>
+  </fieldset>
+
+  <fieldset>
+    <details class="help">
+      <summary>How it works</summary>
+      <p>The model A(T) = A<sub>b</sub>·Q<sub>10</sub><sup>(T−T<sub>b</sub>)/10</sup> is fitted by non-linear least squares on the activity itself (Levenberg–Marquardt), starting from a straight-line regression of ln(activity) on temperature. Q<sub>10</sub> &gt; 1 means activity rises with temperature.</p>
+      <p>The ± values are the square roots of the diagonal of s²(JᵀJ)⁻¹ with s² = SSE/(n−2), the same definition as SciPy’s curve_fit. The base temperature only changes A<sub>b</sub> and its error; Q<sub>10</sub>, R² and the fitted curve stay the same.</p>
+      <p>The Arrhenius regression fits ln(activity) against 1000/T (T in kelvin) with a straight line and reports E<sub>a</sub> = −slope × 1000 × R.</p>
+      <p>The activity axis can be set from 0 to 100 × the largest activity in the data. The step of the arrows is the data maximum / 50, rounded to 1, 2 or 5 × 10ⁿ.</p>
+      <p>All calculations run in your browser. The data you enter is not sent or stored.</p>
+    </details>
+  </fieldset>
+</aside>
+
+<main class="out">
+  <div class="demo" id="demo" role="note" hidden>
+    <p>You’re looking at a demo calculation using example data. To analyse your own data, click <strong>Clear</strong> and enter your temperature and activity pairs in the form.</p>
+  </div>
+  <dl class="readout" aria-label="Fit summary">
+    <div><dt>Q<sub>10</sub></dt><dd id="o-q10">–</dd></div>
+    <div><dt id="o-a-label">Activity at base temperature</dt><dd id="o-a">–</dd></div>
+    <div><dt>R²</dt><dd id="o-r2">–</dd></div>
+    <div><dt>E<sub>a</sub> (Arrhenius)</dt><dd id="o-ea">–</dd></div>
+    <div><dt>Points in fit</dt><dd id="o-n">–</dd></div>
+  </dl>
+  <div class="tabs" role="tablist" aria-label="Output">
+    <button role="tab" aria-selected="true" data-tab="activity">Activity</button>
+    <button role="tab" aria-selected="false" data-tab="lnact">ln(Activity)</button>
+    <button role="tab" aria-selected="false" data-tab="arrhenius">Arrhenius</button>
+    <button role="tab" aria-selected="false" data-tab="report">Report</button>
+  </div>
+  <section class="view" id="view" role="tabpanel"></section>
+  <div class="saves">
+    <button type="button" id="save-png" disabled>Save figure (PNG)</button>
+    <button type="button" id="save-svg" disabled>Save figure (SVG)</button>
+    <button type="button" id="save-txt" disabled>Save report (TXT)</button>
+  </div>
+</main>
+</div>
+
+<script>
+"use strict";
+/* ===================== Constants ===================== */
+const DEG = "\u00B0", R_GAS = 8.314462618;
+const EXAMPLE_DATA = [[10,14.8],[12.5,18.9],[15,23.4],[17.5,27.1],[20,32.9],[22.5,42.3],[25,49.1],
+  [27.5,59.8],[30,75.6],[32.5,88.7],[35,111.9],[37.5,131.2],[40,166.4]].map(p => p.join(", ")).join("\n");
+const EXAMPLE_UNIT = "U/mg";
+const BASE_CHOICES = [
+  ["0", `0${DEG}C`, 0], ["4", `4${DEG}C`, 4], ["20", `20${DEG}C`, 20], ["25", `25${DEG}C`, 25],
+  ["30", `30${DEG}C`, 30], ["37", `37${DEG}C`, 37],
+  ["min", "Minimum"], ["max", "Maximum"], ["mean", "Average"], ["median", "Median"],
+  ["custom", "Custom value (enter below)"],
+];
+const T_RANGE = [0, 100], T_STEP = 0.5, A_FACTOR = 100;
+
+/* ===================== Calculation core ===================== */
+const isNum = s => /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(s);
+function parsePairs(text) {
+  const temps = [], acts = [];
+  let headerSkipped = false;
+  text.split(/\r?\n/).forEach((line, idx) => {
+    const s = line.trim(), n = idx + 1;
+    if (!s || s.startsWith("#")) return;
+    const tokens = s.split(/[,;\s]+/).filter(Boolean);
+    if (!tokens.every(isNum)) {
+      if (!temps.length && !headerSkipped) { headerSkipped = true; return; }
+      throw new Error(`Line ${n}: cannot read numbers: “${s}”`);
+    }
+    if (tokens.length !== 2) throw new Error(`Line ${n}: expected 2 values (temperature, activity), found ${tokens.length}: “${s}”`);
+    temps.push(+tokens[0]); acts.push(+tokens[1]);
+  });
+  return [temps, acts];
+}
+const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+function median(a) { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+function resolveBase(sel, custom, xa) {
+  const c = BASE_CHOICES.find(b => b[0] === sel);
+  if (c && c.length === 3) return c[2];
+  if (sel === "min") return Math.min(...xa);
+  if (sel === "max") return Math.max(...xa);
+  if (sel === "mean") return mean(xa);
+  if (sel === "median") return median(xa);
+  return custom;
+}
+// A(T) = A_b * Q10^((T - T_b)/10)
+const model = (T, ab, q10, base) => ab * Math.pow(q10, (T - base) * 0.1);
+function inv2(a, b, c, d) { const det = a * d - b * c; return det === 0 || !isFinite(det) ? null : [d / det, -b / det, -c / det, a / det]; }
+
+function fitQ10(xa, ya, base) {
+  const e = xa.map(T => (T - base) / 10), n = xa.length;
+  // start: ln A = c + s*T  ->  ln Q10 = 10 s,  ln A_b = c + s*T_b
+  const mx = mean(xa), ly = ya.map(Math.log), my = mean(ly);
+  let sxx = 0, sxy = 0;
+  xa.forEach((x, i) => { sxx += (x - mx) ** 2; sxy += (x - mx) * (ly[i] - my); });
+  const slope = sxy / sxx, icpt = my - slope * mx;
+  let lq = 10 * slope, la = icpt + slope * base;
+  if (!isFinite(lq) || !isFinite(la)) { la = Math.log(mean(ya)); lq = 0; }
+  const sse = (a, b) => { let s = 0; for (let i = 0; i < n; i++) { const r = ya[i] - Math.exp(a + b * e[i]); s += r * r; } return s; };
+  let cur = sse(la, lq), lambda = 1e-3;
+  for (let it = 0; it < 500; it++) {
+    let A = 0, B = 0, D = 0, ga = 0, gb = 0;
+    for (let i = 0; i < n; i++) {
+      const f = Math.exp(la + lq * e[i]), r = ya[i] - f, j1 = f, j2 = f * e[i];
+      A += j1 * j1; B += j1 * j2; D += j2 * j2; ga += j1 * r; gb += j2 * r;
+    }
+    let improved = false, done = false;
+    for (let k = 0; k < 30; k++) {
+      const iv = inv2(A * (1 + lambda), B, B, D * (1 + lambda));
+      if (!iv) { lambda *= 10; continue; }
+      const da = iv[0] * ga + iv[1] * gb, db = iv[2] * ga + iv[3] * gb;
+      const nxt = sse(la + da, lq + db);
+      if (isFinite(nxt) && nxt <= cur) {
+        const rel = (cur - nxt) / Math.max(cur, 1e-300);
+        la += da; lq += db; cur = nxt; lambda = Math.max(lambda / 10, 1e-12); improved = true;
+        if (rel < 1e-14 && Math.abs(da) + Math.abs(db) < 1e-13) done = true;
+        break;
+      }
+      lambda *= 10;
+    }
+    if (!improved || done) break;
+  }
+  const ab = Math.exp(la), q10 = Math.exp(lq);
+  if (!isFinite(ab) || !isFinite(q10)) throw new Error("The fit did not converge for these data.");
+  let A = 0, B = 0, D = 0;
+  for (let i = 0; i < n; i++) {
+    const f = model(xa[i], ab, q10, base), j1 = f / ab, j2 = f * e[i] / q10;
+    A += j1 * j1; B += j1 * j2; D += j2 * j2;
+  }
+  const s2 = cur / (n - 2), iv = inv2(A, B, B, D);
+  const perr = iv ? [Math.sqrt(Math.abs(iv[0] * s2)), Math.sqrt(Math.abs(iv[3] * s2))] : [Infinity, Infinity];
+  const m2 = mean(ya), ssTot = ya.reduce((s, v) => s + (v - m2) ** 2, 0);
+  return { popt: [ab, q10], perr, r2: ssTot > 0 ? 1 - cur / ssTot : NaN };
+}
+
+// ln A = intercept + slope * 1000/T_K,  Ea = -slope * 1000 * R
+function arrheniusFit(t, a) {
+  const x = t.map(v => 1000 / (v + 273.15)), y = a.map(Math.log), n = x.length;
+  const mx = mean(x), my = mean(y);
+  let sxx = 0, syy = 0, sxy = 0;
+  for (let i = 0; i < n; i++) { sxx += (x[i] - mx) ** 2; syy += (y[i] - my) ** 2; sxy += (x[i] - mx) * (y[i] - my); }
+  const slope = sxy / sxx, intercept = my - slope * mx;
+  let sse = 0; for (let i = 0; i < n; i++) sse += (y[i] - intercept - slope * x[i]) ** 2;
+  const s2 = sse / (n - 2), seSlope = Math.sqrt(s2 / sxx), seInt = Math.sqrt(s2 * (1 / n + mx * mx / sxx));
+  return { slope, intercept, seSlope, seInt, r2: syy > 0 ? 1 - sse / syy : NaN, Ea: -slope * 1000 * R_GAS, seEa: seSlope * 1000 * R_GAS };
+}
+const arrLn = (arr, t) => arr.intercept + arr.slope * 1000 / (t + 273.15);
+
+function analyze(x, y, useRange, low, high, baseSel, custom) {
+  if (x.length !== y.length) throw new Error(`Number of temperatures (${x.length}) and activities (${y.length}) differ.`);
+  if (x.length < 3) throw new Error("Enter at least 3 data points.");
+  if (y.some(v => v <= 0)) throw new Error("All activities must be positive (logarithms are used).");
+  if (x.some(v => v <= -273.15)) throw new Error("Temperatures must be above absolute zero (−273.15 °C).");
+  let xa = x, ya = y;
+  if (useRange) {
+    if (!(low < high)) throw new Error("Range low limit must be smaller than the high limit.");
+    const idx = x.map((_, i) => i).filter(i => x[i] >= low && x[i] <= high);
+    xa = idx.map(i => x[i]); ya = idx.map(i => y[i]);
+  }
+  if (xa.length < 3) throw new Error(`Only ${xa.length} data point(s) in the selected range; need at least 3.`);
+  if (baseSel === "custom" && !isFinite(custom)) throw new Error("Enter a custom base temperature.");
+  const base = resolveBase(baseSel, custom, xa);
+  const fit = fitQ10(xa, ya, base);
+  const arr = arrheniusFit(xa, ya);
+  // reference fit to ALL data -> axis limits stay the same when a range is chosen
+  let ref = { popt: fit.popt, arr };
+  if (useRange) { try { ref = { popt: fitQ10(x, y, base).popt, arr: arrheniusFit(x, y) }; } catch (e) { } }
+  const xmin = Math.min(...x), xmax = Math.max(...x), margin = (xmax - xmin) * 0.333;
+  const span = [Math.trunc(xmin - margin), Math.trunc(xmax + margin) + 1];
+  return { x, y, xa, ya, useRange, low, high, base, ...fit, arr, ref, span };
+}
+const linspace = (a, b, n) => Array.from({ length: n }, (_, i) => a + (b - a) * i / (n - 1));
+
+/* ===================== Formatting & report ===================== */
+const f3 = v => v.toFixed(3);
+function fv(v) { // activity values of any magnitude
+  if (!isFinite(v)) return String(v);
+  const a = Math.abs(v);
+  return a !== 0 && (a >= 1e5 || a < 1e-2) ? v.toExponential(3) : v.toFixed(3);
+}
+const unitStr = () => els.unit.value.trim();
+function statsText(a, name, unit, f) {
+  const u = unit ? " " + unit : "";
+  return `Minimum ${name} = ${f(Math.min(...a))}${u}\nMaximum ${name} = ${f(Math.max(...a))}${u}\n` +
+    `Average ${name} = ${f(mean(a))}${u}\nMedian ${name} = ${f(median(a))}${u}\n`;
+}
+function tableText(x, y) {
+  const L = ["#".padStart(4) + " " + "Temperature".padStart(12) + " " + "Activity".padStart(12)];
+  x.forEach((xi, i) => L.push(String(i).padStart(4) + " " + f3(xi).padStart(12) + " " + fv(y[i]).padStart(12)));
+  return L.join("\n");
+}
+function reportText(r, tabbed) {
+  const [ab, q10] = r.popt, [ae, qe] = r.perr, u = unitStr(), us = u ? " " + u : "", arr = r.arr;
+  const out = ["INPUT DATA", tableText(r.x, r.y), "", statsText(r.x, "temperature", DEG + "C", f3), statsText(r.y, "activity", u, fv)];
+  if (r.useRange) out.push(`DATA USED FOR Q10 CALCULATION (${r.low} - ${r.high} ${DEG}C)`, tableText(r.xa, r.ya), "",
+    statsText(r.xa, "temperature", DEG + "C", f3), statsText(r.ya, "activity", u, fv));
+  if (tabbed) {
+    const fcx = linspace(r.span[0], r.span[1], 200);
+    out.push("DATASET", `Temp (${DEG}C)\tActivity${u ? ` (${u})` : ""}`, ...r.x.map((a, i) => `${f3(a)}\t${fv(r.y[i])}`));
+    out.push("", "FITTED CURVE", `Temp (${DEG}C)\tActivity${u ? ` (${u})` : ""}`, ...fcx.map(t => `${f3(t)}\t${fv(model(t, ab, q10, r.base))}`));
+    out.push("", "ARRHENIUS REGRESSION LINE", `Temp (${DEG}C)\t1000/T (1/K)\tln(Activity)`, ...fcx.map(t => `${f3(t)}\t${(1000 / (t + 273.15)).toFixed(5)}\t${arrLn(arr, t).toFixed(5)}`), "");
+  }
+  out.push("RESULTS",
+    `Model: A(T) = A_b * Q10^((T - T_b)/10)`,
+    `Estimated activity at ${r.base.toFixed(2)} ${DEG}C = ${fv(ab)} \u00B1 ${fv(ae)}${us}`,
+    `Q10 (temperature coefficient) = ${f3(q10)} \u00B1 ${f3(qe)}`,
+    `R\u00B2 = ${r.r2.toFixed(6)}`, "",
+    "ARRHENIUS REGRESSION (ln(Activity) vs. 1000/T, data used for Q10 calculation)",
+    `Activation energy Ea = ${f3(arr.Ea / 1000)} \u00B1 ${f3(arr.seEa / 1000)} kJ/mol`,
+    `Slope d ln(A) / d(1000/T) = ${arr.slope.toFixed(4)} \u00B1 ${arr.seSlope.toFixed(4)} (10\u00B3 K)`,
+    `Intercept = ${arr.intercept.toFixed(4)} \u00B1 ${arr.seInt.toFixed(4)}`,
+    `R\u00B2 = ${arr.r2.toFixed(6)}`);
+  return out.join("\n");
+}
+const summaryLines = r => {
+  const u = unitStr();
+  return [`Est. activity at ${r.base.toFixed(2)}${DEG}C = ${fv(r.popt[0])} ± ${fv(r.perr[0])}${u ? " " + u : ""}`,
+    `Q₁₀ = ${f3(r.popt[1])} ± ${f3(r.perr[1])}    R² = ${r.r2.toFixed(4)}`];
+};
+
+/* ===================== Plotting (SVG) ===================== */
+const inv = t => 1000 / (t + 273.15);
+const PLOTS = {
+  activity: { title: "Temperature vs. Activity", xl: () => `Temperature (${DEG}C)`, yl: () => unitStr() ? `Activity (${unitStr()})` : "Activity", tx: t => t, ty: a => a },
+  lnact: { title: "Temperature vs. ln(Activity)", xl: () => `Temperature (${DEG}C)`, yl: () => "ln(Activity)", tx: t => t, ty: a => Math.log(a) },
+  arrhenius: { title: "Arrhenius Plot: 1000/T vs. ln(Activity)", xl: () => "1000/Temperature (K⁻¹)", yl: () => "ln(Activity)", tx: inv, ty: a => Math.log(a) },
+};
+const SCREEN = { ink: "var(--ink)", axis: "var(--axis)", grid: "var(--grid)", used: "var(--used)", excl: "var(--excluded)", fit: "var(--fit)", arr: "var(--arr)", band: "var(--band)", bg: "var(--panel)", line: "var(--line)", font: "var(--sans)" };
+const PRINT = { ink: "#1B1F24", axis: "#6E7580", grid: "#E6E9ED", used: "#FF0000", excl: "#5DC85D", fit: "#2B8CD6", arr: "#6B7079", band: "#6F8BAE", bg: "#FFFFFF", line: "#D7DBE0", font: "Helvetica, Arial, sans-serif" };
+
+function niceTicks(lo, hi, count = 6) {
+  const span = hi - lo || 1, raw = span / count, mag = Math.pow(10, Math.floor(Math.log10(raw))), nr = raw / mag;
+  const step = (nr < 1.5 ? 1 : nr < 3 ? 2 : nr < 7 ? 5 : 10) * mag;
+  const t = []; for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + step * 1e-9; v += step) t.push(+v.toPrecision(12));
+  const dec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+  return { t, dec, step };
+}
+const tickLabel = (v, tk) => (Math.abs(tk.step) >= 1e5 || (Math.abs(tk.step) < 1e-4 && v !== 0)) ? v.toExponential(1) : v.toFixed(Math.min(tk.dec, 10));
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// Curve span: default span, widened to any manual temperature range.
+function curveSpan(r, axes) {
+  let [a, b] = r.span;
+  if (axes && axes.t) { a = Math.min(a, axes.t[0]); b = Math.max(b, axes.t[1]); }
+  return [a, b];
+}
+// Automatic limits from all data and the all-data reference curves (+5 % padding, like matplotlib).
+function autoLimits(kind, r, showArr) {
+  const P = PLOTS[kind], fcx = linspace(r.span[0], r.span[1], 200);
+  const pts = r.x.map((t, i) => [P.tx(t), P.ty(r.y[i])]);
+  fcx.forEach(t => pts.push([P.tx(t), P.ty(model(t, r.ref.popt[0], r.ref.popt[1], r.base))]));
+  if (kind === "arrhenius" && showArr) fcx.forEach(t => pts.push([inv(t), arrLn(r.ref.arr, t)]));
+  const ok = pts.filter(p => isFinite(p[0]) && isFinite(p[1]));
+  let x0 = Math.min(...ok.map(p => p[0])), x1 = Math.max(...ok.map(p => p[0]));
+  let y0 = Math.min(...ok.map(p => p[1])), y1 = Math.max(...ok.map(p => p[1]));
+  const dx = (x1 - x0) || 1, dy = (y1 - y0) || 1;
+  return { x0: x0 - .05 * dx, x1: x1 + .05 * dx, y0: y0 - .05 * dy, y1: y1 + .05 * dy };
+}
+// Manual axis ranges: t -> x (converted to 1000/T on Arrhenius), a -> y (converted to ln on the log plots).
+function applyAxes(kind, L, axes) {
+  if (!axes) return L;
+  L = { ...L };
+  if (axes.t) {
+    const [a, b] = axes.t;
+    if (kind === "arrhenius") { L.x0 = inv(b); L.x1 = inv(a); } else { L.x0 = a; L.x1 = b; }
+  }
+  if (axes.a) {
+    const [lo, hi] = axes.a;
+    if (kind === "activity") { L.y0 = lo; L.y1 = hi; }
+    else {
+      const h = Math.log(hi), l = lo > 0 ? Math.log(lo) : L.y0;
+      if (h > l) { L.y0 = l; L.y1 = h; }
+    }
+  }
+  return L;
+}
+
+let clipSeq = 0;
+function plotSVG(kind, r, c, W, H, ox = 0, oy = 0, standalone = false, o = {}) {
+  const P = PLOTS[kind], m = { l: 76, r: 18, t: 38, b: 56 }, pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const L = applyAxes(kind, autoLimits(kind, r, o.showArr), o.axes);
+  if (o.geom) Object.assign(o.geom, { kind, W, H, left: ox + m.l, top: oy + m.t, pw, ph, x0: L.x0, x1: L.x1 });
+  const sx = v => ox + m.l + (v - L.x0) / (L.x1 - L.x0) * pw, sy = v => oy + m.t + ph - (v - L.y0) / (L.y1 - L.y0) * ph;
+  const pts = r.x.map((t, i) => [P.tx(t), P.ty(r.y[i])]);
+  const used = r.xa.map((t, i) => [P.tx(t), P.ty(r.ya[i])]);
+  const [ca, cb] = curveSpan(r, o.axes), cx = linspace(ca, cb, 240);
+  const fit = cx.map(t => [P.tx(t), P.ty(model(t, r.popt[0], r.popt[1], r.base))]).filter(p => isFinite(p[0]) && isFinite(p[1]));
+  const arrLine = kind === "arrhenius" && o.showArr ? cx.map(t => [inv(t), arrLn(r.arr, t)]) : null;
+  const xt = niceTicks(L.x0, L.x1), yt = niceTicks(L.y0, L.y1), id = `clip${++clipSeq}`;
+  const poly = (ps) => ps.map(p => sx(p[0]).toFixed(1) + "," + sy(p[1]).toFixed(1)).join(" ");
+  let s = "";
+  if (standalone) s += `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" font-family="${c.font}" role="img" aria-label="${esc(P.title)}">`;
+  s += `<defs><clipPath id="${id}"><rect x="${ox + m.l}" y="${oy + m.t}" width="${pw}" height="${ph}"/></clipPath></defs>`;
+  s += `<text x="${ox + m.l + pw / 2}" y="${oy + 22}" text-anchor="middle" font-size="15" font-weight="600" fill="${c.ink}">${esc(P.title)}</text>`;
+  xt.t.forEach(v => { const X = sx(v); s += `<line x1="${X}" x2="${X}" y1="${oy + m.t}" y2="${oy + m.t + ph}" stroke="${c.grid}"/><text x="${X}" y="${oy + m.t + ph + 18}" text-anchor="middle" font-size="12" fill="${c.axis}">${tickLabel(v, xt)}</text>`; });
+  yt.t.forEach(v => { const Y = sy(v); s += `<line x1="${ox + m.l}" x2="${ox + m.l + pw}" y1="${Y}" y2="${Y}" stroke="${c.grid}"/><text x="${ox + m.l - 8}" y="${Y + 4}" text-anchor="end" font-size="12" fill="${c.axis}">${tickLabel(v, yt)}</text>`; });
+  s += `<g clip-path="url(#${id})">`;
+  if (o.band && r.useRange) {
+    const a = sx(P.tx(r.low)), b = sx(P.tx(r.high));
+    s += `<rect x="${Math.min(a, b)}" y="${oy + m.t}" width="${Math.abs(b - a)}" height="${ph}" fill="${c.band}" fill-opacity=".09"/>`;
+  }
+  // Lines first, points on top, so the fitted curves never cover the data points.
+  if (arrLine) s += `<polyline fill="none" stroke="${c.arr}" stroke-width="1.6" points="${poly(arrLine)}"/>`;
+  s += `<polyline fill="none" stroke="${c.fit}" stroke-width="2" stroke-dasharray="7 5" points="${poly(fit)}"/>`;
+  if (r.useRange) pts.forEach(p => s += `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="4" fill="${c.excl}"/>`);
+  used.forEach(p => s += `<circle cx="${sx(p[0])}" cy="${sy(p[1])}" r="4.5" fill="${c.used}"/>`);
+  s += `</g>`;
+  s += `<rect x="${ox + m.l}" y="${oy + m.t}" width="${pw}" height="${ph}" fill="none" stroke="${c.axis}"/>`;
+  s += `<text x="${ox + m.l + pw / 2}" y="${oy + H - 12}" text-anchor="middle" font-size="13" fill="${c.ink}">${esc(P.xl())}</text>`;
+  s += `<text transform="translate(${ox + 18} ${oy + m.t + ph / 2}) rotate(-90)" text-anchor="middle" font-size="13" fill="${c.ink}">${esc(P.yl())}</text>`;
+  // legend in the emptiest corner
+  const items = (r.useRange ? [["dot", c.excl, "Data"], ["dot", c.used, "Data used for Q₁₀ calculation"]] : [["dot", c.used, "Data"]])
+    .concat([["dash", c.fit, `Fit Q₁₀ = ${f3(r.popt[1])}`]]);
+  if (arrLine) items.push(["line", c.arr, `Arrhenius regression Eₐ = ${(r.arr.Ea / 1000).toFixed(2)} kJ/mol`]);
+  const lw = Math.max(...items.map(i => i[2].length)) * 6.6 + 44, lh = items.length * 20 + 10;
+  const corners = [[m.l + 8, m.t + 8], [m.l + pw - lw - 8, m.t + 8], [m.l + 8, m.t + ph - lh - 8], [m.l + pw - lw - 8, m.t + ph - lh - 8]];
+  const probe = pts.concat(fit.filter((_, i) => i % 4 === 0));
+  const hits = ([cx0, cy0]) => probe.filter(p => { const X = sx(p[0]) - ox, Y = sy(p[1]) - oy; return X > cx0 - 4 && X < cx0 + lw + 4 && Y > cy0 - 4 && Y < cy0 + lh + 4; }).length;
+  const [lx, ly] = corners.reduce((b, k) => hits(k) < hits(b) ? k : b);
+  s += `<rect x="${ox + lx}" y="${oy + ly}" width="${lw}" height="${lh}" rx="5" fill="${c.bg}" fill-opacity=".92" stroke="${c.line}"/>`;
+  items.forEach(([t, col, label], i) => {
+    const Y = oy + ly + 17 + i * 20;
+    s += t === "dot" ? `<circle cx="${ox + lx + 18}" cy="${Y - 4}" r="4.5" fill="${col}"/>`
+      : `<line x1="${ox + lx + 6}" x2="${ox + lx + 30}" y1="${Y - 4}" y2="${Y - 4}" stroke="${col}" stroke-width="2"${t === "dash" ? ' stroke-dasharray="7 5"' : ""}/>`;
+    s += `<text x="${ox + lx + 38}" y="${Y}" font-size="12" fill="${c.ink}">${esc(label)}</text>`;
+  });
+  if (standalone) s += "</svg>";
+  return s;
+}
+function combinedSVG(r, title, o) {
+  const W = 800, PH = 560, c = PRINT;
+  let y = 20, head = "";
+  if (title) { head += `<text x="${W / 2}" y="${y + 20}" text-anchor="middle" font-size="22" font-weight="600" fill="${c.ink}">${esc(title)}</text>`; y += 42; }
+  summaryLines(r).forEach(l => { head += `<text x="${W / 2}" y="${y + 14}" text-anchor="middle" font-size="14" fill="${c.ink}">${esc(l)}</text>`; y += 20; });
+  y += 10;
+  let body = "";
+  ["activity", "lnact", "arrhenius"].forEach((k, i) => body += plotSVG(k, r, c, W, PH, 0, y + i * PH, false, { ...o, band: false }));
+  const H = y + 3 * PH + 10;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${c.font}"><rect width="100%" height="100%" fill="#fff"/>${head}${body}</svg>`;
+}
+
+/* ===================== UI ===================== */
+const $ = id => document.getElementById(id);
+const els = { data: $("data"), title: $("title"), unit: $("unit"), useRange: $("use-range"), low: $("low"), high: $("high"),
+  base: $("base"), custom: $("custom"), tab: $("tabdelim"), showArr: $("show-arr"), status: $("status"), view: $("view"),
+  axT: $("ax-t"), tmin: $("tmin"), tmax: $("tmax"), axA: $("ax-a"), amin: $("amin"), amax: $("amax"), aHint: $("a-hint") };
+BASE_CHOICES.forEach(([v, label]) => els.base.add(new Option(label, v, v === "25", v === "25")));
+let result = null, current = "activity";
+
+function setStatus(msg, err = false) { els.status.textContent = msg; els.status.classList.toggle("error", err); els.status.setAttribute("role", err ? "alert" : "status"); }
+
+/* ---- Activity-axis scale: 0 .. 100 x data max; step = (data max / 50) rounded to 1, 2 or 5 x 10^k ---- */
+const aScale = { max: 0, limit: 0, step: 1, dec: 0 };
+function niceStep(raw) {
+  const mag = Math.pow(10, Math.floor(Math.log10(raw))), nr = raw / mag;
+  return (nr < 1.5 ? 1 : nr < 3.5 ? 2 : nr < 7.5 ? 5 : 10) * mag;
+}
+const fmtA = v => (+v).toFixed(aScale.dec);
+const clampA = v => isFinite(v) ? Math.min(Math.max(v, 0), aScale.limit) : 0;
+function configureAScale(maxA) {
+  const step = niceStep(maxA / 50), dec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+  Object.assign(aScale, { max: maxA, step, dec });
+  aScale.limit = +(Math.floor(A_FACTOR * maxA / step + 1e-9) * step).toFixed(dec);
+  [els.amin, els.amax].forEach(i => { i.min = 0; i.max = aScale.limit; i.step = step; });
+  els.aHint.textContent = `Range 0–${fmtA(aScale.limit)} (100 × data max ${+maxA.toPrecision(6)}), step ${fmtA(step)} (set from the data).`;
+  if (els.axA.checked) {
+    let lo = clampA(parseFloat(els.amin.value)), hi = clampA(parseFloat(els.amax.value));
+    if (!(hi > lo)) [lo, hi] = defaultA();
+    els.amin.value = fmtA(lo); els.amax.value = fmtA(hi);
+  }
+}
+function defaultA() { // 0 .. top of the automatic activity axis, rounded up to the step
+  const L = autoLimits("activity", result, false);
+  return [0, clampA(+(Math.ceil(L.y1 / aScale.step - 1e-9) * aScale.step).toFixed(aScale.dec))];
+}
+function defaultT() {
+  const L = autoLimits("activity", result, false), cl = v => Math.min(Math.max(v, T_RANGE[0]), T_RANGE[1]);
+  return [cl(Math.floor(L.x0 / T_STEP) * T_STEP), cl(Math.ceil(L.x1 / T_STEP) * T_STEP)];
+}
+function toggleStates() {
+  els.low.disabled = els.high.disabled = !els.useRange.checked;
+  els.custom.disabled = els.base.value !== "custom";
+  els.axT.disabled = els.axA.disabled = !result;
+  els.tmin.disabled = els.tmax.disabled = !(result && els.axT.checked);
+  els.amin.disabled = els.amax.disabled = !(result && els.axA.checked);
+}
+// Manual axis ranges; an invalid range stays automatic and is reported.
+let axisMsg = "";
+function readAxes() {
+  const axes = { t: null, a: null }, msgs = [];
+  if (els.axT.checked) {
+    const a = parseFloat(els.tmin.value), b = parseFloat(els.tmax.value);
+    if (isFinite(a) && isFinite(b) && a >= T_RANGE[0] && b <= T_RANGE[1] && a < b) axes.t = [a, b];
+    else msgs.push(`Temperature axis: enter 0 ≤ Min < Max ≤ 100 ${DEG}C.`);
+  }
+  if (els.axA.checked) {
+    const a = parseFloat(els.amin.value), b = parseFloat(els.amax.value);
+    if (isFinite(a) && isFinite(b) && a >= 0 && b <= aScale.limit + 1e-12 && a < b) axes.a = [a, b];
+    else msgs.push(`Activity axis: enter 0 ≤ Min < Max ≤ ${fmtA(aScale.limit)}.`);
+  }
+  axisMsg = msgs.join(" ");
+  return axes;
+}
+const plotOpts = () => ({ axes: readAxes(), showArr: els.showArr.checked });
+
+function plotSize() { const w = els.view.clientWidth; return w < 560 ? [440, 370] : [700, 480]; }
+function render() {
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === current));
+  if (!result) { els.view.innerHTML = `<div class="empty"><p>Paste temperature and activity pairs, or load the example, then calculate.</p></div>`; return; }
+  if (current === "report") { els.view.innerHTML = `<pre class="report"></pre>`; els.view.firstChild.textContent = reportText(result, els.tab.checked); return; }
+  const o = { ...plotOpts(), band: true, geom: plotGeom };
+  const t = els.title.value.trim(), [l1, l2] = summaryLines(result), [W, H] = plotSize();
+  els.view.innerHTML = (t ? `<p class="figtitle"></p>` : "") + `<p class="figsum">${esc(l1)}<br>${esc(l2)}</p><div class="plot">${plotSVG(current, result, SCREEN, W, H, 0, 0, true, o)}</div>`;
+  if (t) els.view.querySelector(".figtitle").textContent = t;
+  els.view.insertAdjacentHTML("beforeend", `<p class="plothint">Drag across the plot to fit only that temperature range. Double-click to use all data.</p>`);
+  attachRangeSelect(els.view.querySelector(".plot svg"));
+}
+
+/* ---- Drag-to-select the fit range on a plot ----
+   plotGeom holds the plot area (in SVG units) and its x limits. A drag inside the
+   plot area draws a band; on release the band is converted to temperatures
+   (1000/T -> T on the Arrhenius plot), written into Low/High, the range box is
+   ticked and the fit is recalculated. A click without dragging does nothing;
+   a double-click returns to all data. */
+const plotGeom = {};
+const X_TO_T = { activity: v => v, lnact: v => v, arrhenius: v => 1000 / v - 273.15 };
+function attachRangeSelect(svg) {
+  if (!svg) return;
+  const g = plotGeom, NS = "http://www.w3.org/2000/svg";
+  const toSvg = e => { const b = svg.getBoundingClientRect(); return [(e.clientX - b.left) * g.W / b.width, (e.clientY - b.top) * g.H / b.height]; };
+  const inside = ([x, y]) => x >= g.left && x <= g.left + g.pw && y >= g.top && y <= g.top + g.ph;
+  const clampX = x => Math.min(Math.max(x, g.left), g.left + g.pw);
+  let start = null, band = null;
+  svg.addEventListener("pointermove", e => {
+    if (start === null) { svg.style.cursor = inside(toSvg(e)) ? "crosshair" : ""; return; }
+    const x = clampX(toSvg(e)[0]);
+    band.setAttribute("x", Math.min(start, x)); band.setAttribute("width", Math.abs(x - start));
+  });
+  svg.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return;
+    const p = toSvg(e);
+    if (!inside(p)) return;
+    start = p[0];
+    band = document.createElementNS(NS, "rect");
+    band.setAttribute("x", start); band.setAttribute("y", g.top); band.setAttribute("width", 0); band.setAttribute("height", g.ph);
+    band.setAttribute("fill", "var(--band)"); band.setAttribute("fill-opacity", ".16");
+    band.setAttribute("stroke", "var(--band)"); band.setAttribute("stroke-opacity", ".7");
+    svg.appendChild(band); svg.classList.add("selecting");
+    svg.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  const finish = (e, cancel) => {
+    if (start === null) return;
+    const x = clampX(toSvg(e)[0]), a = start;
+    start = null; svg.classList.remove("selecting"); band.remove(); band = null;
+    if (cancel || Math.abs(x - a) < 4) return;   // a click, not a drag
+    const toT = v => X_TO_T[g.kind](g.x0 + (v - g.left) / g.pw * (g.x1 - g.x0));
+    const t1 = toT(a), t2 = toT(x);
+    selectRange(Math.min(t1, t2), Math.max(t1, t2));
+  };
+  svg.addEventListener("pointerup", e => finish(e, false));
+  svg.addEventListener("pointercancel", e => finish(e, true));
+  svg.addEventListener("dblclick", e => { if (inside(toSvg(e))) useAllData(); });
+}
+function selectRange(lo, hi) {
+  els.low.value = (Math.floor(lo * 10) / 10).toFixed(1);
+  els.high.value = (Math.ceil(hi * 10) / 10).toFixed(1);
+  els.useRange.checked = true; toggleStates();
+  run(true);
+  if (result && result.useRange) setStatus(`Fit range ${els.low.value}–${els.high.value} ${DEG}C (${result.xa.length} of ${result.x.length} points): Q10 = ${f3(result.popt[1])}, R² = ${result.r2.toFixed(4)}`);
+}
+function useAllData() {
+  if (!els.useRange.checked) return;
+  els.useRange.checked = false; toggleStates(); run(true);
+  if (result) setStatus(`Using all data: Q10 = ${f3(result.popt[1])}, R² = ${result.r2.toFixed(4)}`);
+}
+// Apply the axis fields: redraw only, nothing is recalculated.
+function applyAxisFields() {
+  if (!result) return;
+  readAxes();
+  if (axisMsg) setStatus(axisMsg + " That axis stays automatic.", true);
+  else setStatus("Axis scales applied.");
+  render();
+}
+let lastW = 0;
+window.addEventListener("resize", () => { const w = plotSize()[0]; if (w !== lastW) { lastW = w; if (result && current !== "report") render(); } });
+
+function updateReadout() {
+  const r = result, u = unitStr();
+  $("o-q10").innerHTML = r ? `${f3(r.popt[1])}<small>± ${f3(r.perr[1])}</small>` : "–";
+  $("o-a").innerHTML = r ? `${esc(fv(r.popt[0]))}<small>± ${esc(fv(r.perr[0]))}${u ? " " + esc(u) : ""}</small>` : "–";
+  $("o-a-label").textContent = r ? `Activity at ${r.base.toFixed(2)}${DEG}C` : "Activity at base temperature";
+  $("o-r2").textContent = r ? r.r2.toFixed(4) : "–";
+  $("o-ea").innerHTML = r ? `${(r.arr.Ea / 1000).toFixed(2)}<small>kJ/mol</small>` : "–";
+  $("o-n").innerHTML = r ? `${r.xa.length}<small>of ${r.x.length}</small>` : "–";
+  ["save-png", "save-svg", "save-txt"].forEach(id => $(id).disabled = !r);
+}
+function run(quiet = false) {
+  let r;
+  try {
+    const [t, a] = parsePairs(els.data.value);
+    r = analyze(t, a, els.useRange.checked, parseFloat(els.low.value), parseFloat(els.high.value), els.base.value, parseFloat(els.custom.value));
+  } catch (e) { setStatus("Cannot calculate: " + e.message, true); return; }
+  result = r;
+  configureAScale(Math.max(...r.y));
+  if (current === "report" && !quiet) current = "activity";
+  toggleStates(); updateReadout();
+  setStatus(`Q10 = ${f3(r.popt[1])}, activity at ${r.base.toFixed(2)}${DEG}C = ${fv(r.popt[0])}, R² = ${r.r2.toFixed(4)}`);
+  render();
+  readAxes(); if (axisMsg) setStatus(axisMsg + " That axis stays automatic.", true);
+}
+const rerun = () => { if (result) run(true); };
+
+function hideDemo() { $("demo").hidden = true; }
+function clearAll() {
+  hideDemo(); els.data.value = ""; els.title.value = ""; els.unit.value = ""; result = null;
+  els.axT.checked = els.axA.checked = false;
+  [els.tmin, els.tmax, els.amin, els.amax].forEach(i => i.value = "");
+  els.aHint.textContent = "Range and step are set from the data after calculating.";
+  toggleStates(); updateReadout(); render(); setStatus("Cleared.");
+}
+function loadCSVText(text, name) {
+  const rows = [];
+  text.replace(/^\uFEFF/, "").split(/\r?\n/).forEach(line => {
+    const cells = line.split(/[,;\t ]+/).map(s => s.trim()).filter(Boolean);
+    if (cells.length >= 2 && isNum(cells[0]) && isNum(cells[1])) rows.push([+cells[0], +cells[1]]);
+  });
+  if (!rows.length) { setStatus("Load failed: no numeric rows found (need two numeric columns).", true); return; }
+  els.data.value = rows.map(([a, b]) => `${a}, ${b}`).join("\n");
+  setStatus(`Loaded ${rows.length} rows from ${name}. Click Calculate.`);
+}
+
+/* ---- Saving ---- */
+function fileBase() { return (els.title.value.trim() || "q10_activity").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "_") || "q10_activity"; }
+function save(filename, data) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: filename.endsWith(".svg") ? "image/svg+xml" : "text/plain;charset=utf-8" });
+  const a = document.createElement("a"), url = URL.createObjectURL(blob);
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setStatus(`Saved ${filename}.`);
+}
+function svgToPNG(svg) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    img.onload = () => {
+      const scale = 2, cv = document.createElement("canvas");
+      cv.width = img.width * scale; cv.height = img.height * scale;
+      const ctx = cv.getContext("2d"); ctx.scale(scale, scale); ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url); cv.toBlob(b => b ? res(b) : rej(new Error("PNG encoding failed")), "image/png");
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("Could not render the figure")); };
+    img.src = url;
+  });
+}
+
+/* ---- Events ---- */
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => { current = b.dataset.tab; render(); }));
+$("btn-run").addEventListener("click", () => run());
+$("btn-example").addEventListener("click", () => { els.data.value = EXAMPLE_DATA; els.title.value = "Example"; els.unit.value = EXAMPLE_UNIT; setStatus("Example data loaded."); });
+$("btn-clear").addEventListener("click", clearAll);
+$("btn-all").addEventListener("click", useAllData);
+$("btn-csv").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  hideDemo();
+  const rd = new FileReader();
+  rd.onload = () => loadCSVText(String(rd.result), f.name);
+  rd.onerror = () => setStatus("Load failed: could not read the file.", true);
+  rd.readAsText(f); e.target.value = "";
+});
+els.useRange.addEventListener("change", () => { toggleStates(); rerun(); });
+els.base.addEventListener("change", () => { toggleStates(); rerun(); });
+[els.low, els.high, els.custom].forEach(i => i.addEventListener("change", rerun));
+els.tab.addEventListener("change", () => { if (current === "report") render(); });
+els.showArr.addEventListener("change", () => { if (result) render(); });
+els.title.addEventListener("input", () => { if (result && current !== "report") render(); });
+els.unit.addEventListener("input", () => { if (result) { updateReadout(); render(); } });
+els.data.addEventListener("input", hideDemo, { once: true });
+
+// Axis scales: ticking fills empty fields with the current automatic range.
+els.axT.addEventListener("change", () => {
+  if (els.axT.checked && result && !(els.tmin.value && els.tmax.value)) { const [a, b] = defaultT(); els.tmin.value = a.toFixed(1); els.tmax.value = b.toFixed(1); }
+  toggleStates(); applyAxisFields();
+});
+els.axA.addEventListener("change", () => {
+  if (els.axA.checked && result && !(els.amin.value && els.amax.value)) { const [a, b] = defaultA(); els.amin.value = fmtA(a); els.amax.value = fmtA(b); }
+  toggleStates(); applyAxisFields();
+});
+// "change" fires on Enter, on the arrows and when the field loses focus.
+[els.tmin, els.tmax, els.amin, els.amax].forEach(i => i.addEventListener("change", applyAxisFields));
+
+document.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); run(); } });
+$("save-svg").addEventListener("click", () => result && save(fileBase() + "_q10_plots.svg", combinedSVG(result, els.title.value.trim(), plotOpts())));
+$("save-png").addEventListener("click", async () => {
+  if (!result) return;
+  try { save(fileBase() + "_q10_plots.png", await svgToPNG(combinedSVG(result, els.title.value.trim(), plotOpts()))); }
+  catch (e) { setStatus(e.message, true); }
+});
+$("save-txt").addEventListener("click", () => result && save(fileBase() + "_q10_results.txt", reportText(result, els.tab.checked) + "\n"));
+
+/* ---- Start-up: demo calculation ---- */
+toggleStates(); updateReadout(); render();
+els.data.value = EXAMPLE_DATA; els.title.value = "Example"; els.unit.value = EXAMPLE_UNIT;
+run();
+$("demo").hidden = false;
+setStatus("Showing the demo calculation. Click Clear to start with your own data.");
+</script>
+</body>
+</html>
