@@ -132,7 +132,7 @@ from scipy.optimize import curve_fit
 # ======================================================================
 DEG = "\u00B0"
 R_GAS = 8.314462618          # gas constant, J mol^-1 K^-1
-DATA_ROWS = 14               # visible lines in the data input box
+DATA_ROWS = 10               # visible lines in the data input box
 TITLE_SIZE = 18              # plot-title font size (single-plot tabs)
 TITLE_SIZE_COMBINED = 20     # plot-title font size (saved 3-plot figure)
 
@@ -158,6 +158,7 @@ FIXED_BASE = {BASE_CHOICES[0]: 0.0, BASE_CHOICES[1]: 4.0, BASE_CHOICES[2]: 20.0,
 # Manual axis scales
 T_AXIS_RANGE = (0.0, 100.0)  # °C
 T_AXIS_STEP = 0.5            # °C
+PLOT_ASPECT = 3 / 4            # plot area height / width (width 4 : height 3)
 A_AXIS_FACTOR = 100          # activity axis may go up to 100 x the data maximum
 
 NOTICE_DEMO = ("You're looking at a demo calculation using example data. To analyse your own "
@@ -578,6 +579,7 @@ def render_single(fig, name, drawer, r, title, show_arr=False, axes=None):
     ax = fig.add_subplot(111)
     drawer(ax, r, show_arr, axes)
     apply_axes(ax, name, axes)
+    ax.set_box_aspect(PLOT_ASPECT)   # keeps 4:3 when the window is resized
     if r["use_range"]:
         ax.axvspan(TO_X[name](r["low"]), TO_X[name](r["high"]), color=C_BAND, alpha=0.09, lw=0, zorder=0)
     fig._q10_header = (title, summary_line(r), TITLE_SIZE, 9)
@@ -592,7 +594,7 @@ def render_combined(fig, r, title, show_arr=False, axes=None):
         ax = fig.add_subplot(3, 1, i)
         drawer(ax, r, show_arr, axes)
         apply_axes(ax, name, axes)
-        ax.set_box_aspect(3 / 4)
+        ax.set_box_aspect(PLOT_ASPECT)
     fig._q10_header = (title, summary_line(r), TITLE_SIZE_COMBINED, 10)
     apply_header(fig)
 
@@ -699,8 +701,8 @@ class Q10App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Q10 calculator - temperature vs. activity")
-        self.geometry(f"1280x{min(880, self.winfo_screenheight() - 80)}")
-        self.minsize(1000, 600)
+        self.geometry(f"1280x{min(860, self.winfo_screenheight() - 60)}")   # fits a 900-px-high screen
+        self.minsize(1080, 600)
 
         self.result = None
         self.help_win = None
@@ -734,112 +736,78 @@ class Q10App(tk.Tk):
         self.load_example()
         self.run()
         self.status.set("Showing the demo calculation. Click Clear to start with your own data.")
-        self.notice.pack(side=tk.TOP, fill=tk.X, pady=(0, 6), before=self.nb)
+        self.notice.pack(side=tk.TOP, fill=tk.X, pady=(0, 4), before=self.nb)
 
     # ---- layout ------------------------------------------------------
     def _build_controls(self):
-        left = ttk.Frame(self, padding=8)
+        """Left panel, top to bottom: plot title, data (+ activity unit), base temperature,
+        Calculate, status, fit range, options, save buttons.
+        Widgets below the data box are packed to the BOTTOM first (in reverse order), so on a
+        short window only the data box shrinks and everything fits in a 900-pixel-high screen."""
+        left = ttk.Frame(self, padding=(8, 6, 8, 6))
         left.pack(side=tk.LEFT, fill=tk.Y)
+        muted = "#5F6670"
 
         head = ttk.Frame(left)
-        head.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
+        head.pack(side=tk.TOP, fill=tk.X, pady=(0, 4))
         ttk.Label(head, text="Q10 calculator: temperature vs. activity",
-                  font=("TkDefaultFont", 12, "bold")).pack(side=tk.LEFT)
+                  font=("TkDefaultFont", 11, "bold")).pack(side=tk.LEFT)
         ttk.Button(head, text="How it works", command=self.show_help).pack(side=tk.RIGHT, padx=(8, 0))
 
-        f = ttk.LabelFrame(left, text="Plot title", padding=6)
-        f.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
-        ttk.Entry(f, textvariable=self.var_title, width=46).pack(fill=tk.X)
+        f = ttk.LabelFrame(left, text="Plot title", padding=(6, 2, 6, 4))
+        f.pack(side=tk.TOP, fill=tk.X, pady=(0, 4))
+        ttk.Entry(f, textvariable=self.var_title, width=42).pack(fill=tk.X)
         self.var_title.trace_add("write", lambda *a: self._redraw_plots())
 
-        # Everything below the data box is packed to the BOTTOM first, so on a short
-        # screen only the data box shrinks.
-        self.status = tk.StringVar(value="Ready.")
-        self.status_label = ttk.Label(left, textvariable=self.status, foreground="#555", wraplength=350)
-        self.status_label.pack(side=tk.BOTTOM, anchor="w", pady=(8, 0))
-
+        # ---- bottom-packed part (listed from the bottom of the panel upwards) ----
         row = ttk.Frame(left)
-        row.pack(side=tk.BOTTOM, fill=tk.X, pady=(6, 0))
+        row.pack(side=tk.BOTTOM, fill=tk.X, pady=(4, 0))
         ttk.Button(row, text="Save figure...", command=self.save_figure).pack(side=tk.LEFT, expand=True, fill=tk.X)
         ttk.Button(row, text="Save results...", command=self.save_results).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(4, 0))
-        ttk.Button(left, text="Calculate (Ctrl+Enter)", command=self.run).pack(side=tk.BOTTOM, fill=tk.X, ipady=4)
         ttk.Checkbutton(left, text="Also show tab-delimited data in Results", variable=self.var_tab,
-                        command=self._refresh_results).pack(side=tk.BOTTOM, anchor="w", pady=(0, 6))
-        ttk.Checkbutton(left, text="Show Arrhenius regression line on the Arrhenius plot",
-                        variable=self.var_arr, command=self._redraw_plots).pack(side=tk.BOTTOM, anchor="w", pady=(0, 2))
-
-        # Axis scales: only redraw the plots; nothing is recalculated.
-        f = ttk.LabelFrame(left, text="Axis scales", padding=6)
-        f.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 6))
-        ttk.Label(f, text="Tick to set; press Enter or move to another field to apply.",
-                  foreground="#555").grid(row=0, column=0, columnspan=6, sticky="w", pady=(0, 4))
-        ttk.Checkbutton(f, text="Temperature", variable=self.var_axt,
-                        command=lambda: self._axis_toggled("t")).grid(row=1, column=0, sticky="w")
-        ttk.Label(f, text="Min").grid(row=1, column=1, padx=(6, 2))
-        self.sp_tmin = ttk.Spinbox(f, textvariable=self.var_tmin, width=8, from_=T_AXIS_RANGE[0],
-                                   to=T_AXIS_RANGE[1], increment=T_AXIS_STEP, format="%.1f",
-                                   command=self._apply_axes)
-        self.sp_tmin.grid(row=1, column=2)
-        ttk.Label(f, text="Max").grid(row=1, column=3, padx=(6, 2))
-        self.sp_tmax = ttk.Spinbox(f, textvariable=self.var_tmax, width=8, from_=T_AXIS_RANGE[0],
-                                   to=T_AXIS_RANGE[1], increment=T_AXIS_STEP, format="%.1f",
-                                   command=self._apply_axes)
-        self.sp_tmax.grid(row=1, column=4)
-        ttk.Label(f, text=f"{DEG}C").grid(row=1, column=5, padx=(4, 0))
-        ttk.Label(f, text=f"Range 0–100 {DEG}C, step {T_AXIS_STEP} {DEG}C", foreground="#555"
-                  ).grid(row=2, column=1, columnspan=5, sticky="w", pady=(0, 6))
-        ttk.Checkbutton(f, text="Activity", variable=self.var_axa,
-                        command=lambda: self._axis_toggled("a")).grid(row=3, column=0, sticky="w")
-        ttk.Label(f, text="Min").grid(row=3, column=1, padx=(6, 2))
-        self.sp_amin = ttk.Spinbox(f, textvariable=self.var_amin, width=8, from_=0, to=1,
-                                   increment=1, command=self._apply_axes)
-        self.sp_amin.grid(row=3, column=2)
-        ttk.Label(f, text="Max").grid(row=3, column=3, padx=(6, 2))
-        self.sp_amax = ttk.Spinbox(f, textvariable=self.var_amax, width=8, from_=0, to=1,
-                                   increment=1, command=self._apply_axes)
-        self.sp_amax.grid(row=3, column=4)
-        self.a_hint = tk.StringVar(value="Range and step are set from the data after calculating.")
-        ttk.Label(f, textvariable=self.a_hint, foreground="#555", wraplength=300
-                  ).grid(row=4, column=1, columnspan=5, sticky="w")
-        for sp in (self.sp_tmin, self.sp_tmax, self.sp_amin, self.sp_amax):
-            sp.bind("<Return>", lambda e: self._apply_axes())
-            sp.bind("<KP_Enter>", lambda e: self._apply_axes())
-            sp.bind("<FocusOut>", lambda e: self._apply_axes())
-
-        # Base temperature
-        f = ttk.LabelFrame(left, text="Base temperature", padding=6)
-        f.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 6))
-        cb = ttk.Combobox(f, textvariable=self.var_base, values=BASE_CHOICES, state="readonly", width=30)
-        cb.pack(fill=tk.X)
-        cb.bind("<<ComboboxSelected>>", lambda e: (self._toggle_states(), self._rerun()))
-        r = ttk.Frame(f)
-        r.pack(fill=tk.X, pady=(4, 0))
-        ttk.Label(r, text="Custom value").pack(side=tk.LEFT)
-        self.ent_custom = ttk.Entry(r, textvariable=self.var_custom, width=8)
-        self.ent_custom.pack(side=tk.LEFT, padx=4)
-        ttk.Label(r, text=f"{DEG}C").pack(side=tk.LEFT)
-        self.ent_custom.bind("<Return>", lambda e: self._rerun())
-        self.ent_custom.bind("<FocusOut>", lambda e: self._rerun())
+                        command=self._refresh_results).pack(side=tk.BOTTOM, anchor="w")
+        ttk.Checkbutton(left, text="Show Arrhenius regression line", variable=self.var_arr,
+                        command=self._redraw_plots).pack(side=tk.BOTTOM, anchor="w")
 
         # Temperature range for the fit
-        f = ttk.LabelFrame(left, text="Temperature range for the fit", padding=6)
-        f.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 6))
+        f = ttk.LabelFrame(left, text="Temperature range for the fit", padding=(6, 2, 6, 4))
+        f.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 4))
         ttk.Checkbutton(f, text="Use only data within a temperature range", variable=self.var_range,
                         command=lambda: (self._toggle_states(), self._rerun())).pack(anchor="w")
         r = ttk.Frame(f)
-        r.pack(fill=tk.X, pady=(4, 0))
+        r.pack(fill=tk.X, pady=(2, 0))
         ttk.Label(r, text="Low").pack(side=tk.LEFT)
-        self.sp_low = ttk.Spinbox(r, textvariable=self.var_low, width=7, from_=-100, to=200, increment=0.5)
-        self.sp_low.pack(side=tk.LEFT, padx=4)
+        self.sp_low = ttk.Spinbox(r, textvariable=self.var_low, width=6, from_=-100, to=200, increment=0.5)
+        self.sp_low.pack(side=tk.LEFT, padx=3)
         ttk.Label(r, text="High").pack(side=tk.LEFT)
-        self.sp_high = ttk.Spinbox(r, textvariable=self.var_high, width=7, from_=-100, to=200, increment=0.5)
-        self.sp_high.pack(side=tk.LEFT, padx=4)
+        self.sp_high = ttk.Spinbox(r, textvariable=self.var_high, width=6, from_=-100, to=200, increment=0.5)
+        self.sp_high.pack(side=tk.LEFT, padx=3)
         ttk.Label(r, text=f"{DEG}C").pack(side=tk.LEFT)
         ttk.Button(r, text="Use all data", command=self.use_all_data).pack(side=tk.RIGHT)
+        ttk.Label(f, text="Or drag across a plot; double-click a plot to use all data.",
+                  foreground=muted).pack(anchor="w", pady=(2, 0))
 
-        # Data box (fills the remaining height)
-        f = ttk.LabelFrame(left, text=f"Data: temperature ({DEG}C), activity — one pair per line", padding=6)
-        f.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(0, 6))
+        # Status, Calculate, base temperature (directly under the data box)
+        self.status = tk.StringVar(value="Ready.")
+        self.status_label = ttk.Label(left, textvariable=self.status, foreground=muted, wraplength=330)
+        self.status_label.pack(side=tk.BOTTOM, anchor="w", pady=(2, 6))
+        ttk.Button(left, text="Calculate (Ctrl+Enter)", command=self.run).pack(side=tk.BOTTOM, fill=tk.X, ipady=3)
+        f = ttk.LabelFrame(left, text="Base temperature", padding=(6, 2, 6, 4))
+        f.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 6))
+        cb = ttk.Combobox(f, textvariable=self.var_base, values=BASE_CHOICES, state="readonly", width=20)
+        cb.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        cb.bind("<<ComboboxSelected>>", lambda e: (self._toggle_states(), self._rerun()))
+        ttk.Label(f, text="Custom").pack(side=tk.LEFT, padx=(6, 2))
+        self.ent_custom = ttk.Entry(f, textvariable=self.var_custom, width=6)
+        self.ent_custom.pack(side=tk.LEFT)
+        ttk.Label(f, text=f"{DEG}C").pack(side=tk.LEFT, padx=(2, 0))
+        self.ent_custom.bind("<Return>", lambda e: self._rerun())
+        self.ent_custom.bind("<FocusOut>", lambda e: self._rerun())
+
+        # ---- data box: fills the remaining height ----
+        f = ttk.LabelFrame(left, text=f"Data, one pair per line: temperature ({DEG}C), activity",
+                           padding=(6, 2, 6, 4))
+        f.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(0, 4))
         r = ttk.Frame(f)
         r.pack(side=tk.BOTTOM, fill=tk.X, pady=(4, 0))
         ttk.Label(r, text="Activity unit").pack(side=tk.LEFT)
@@ -851,18 +819,55 @@ class Q10App(tk.Tk):
         ttk.Button(r, text="Clear", command=self.clear).pack(side=tk.LEFT)
         box = ttk.Frame(f)
         box.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.txt_data = tk.Text(box, width=34, height=DATA_ROWS, font=("TkFixedFont", 10), undo=True)
+        self.txt_data = tk.Text(box, width=32, height=DATA_ROWS, font=("TkFixedFont", 10), undo=True)
         sb = ttk.Scrollbar(box, orient="vertical", command=self.txt_data.yview)
         self.txt_data.configure(yscrollcommand=sb.set)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         self.txt_data.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.txt_data.bind("<<Modified>>", self._data_modified)
 
+    def _build_axis_bar(self, parent):
+        """Axis scales: one compact row below the plots. Only redraws; nothing is recalculated."""
+        bar = ttk.Frame(parent, padding=(4, 2, 4, 4))
+        ttk.Label(bar, text="Axis scales", font=("TkDefaultFont", 10, "bold")).pack(side=tk.LEFT, padx=(0, 10))
+
+        def spin(var, **kw):
+            sp = ttk.Spinbox(bar, textvariable=var, width=7, command=self._apply_axes, **kw)
+            for ev in ("<Return>", "<KP_Enter>", "<FocusOut>"):
+                sp.bind(ev, lambda e: self._apply_axes())
+            return sp
+
+        ttk.Checkbutton(bar, text="Temperature", variable=self.var_axt,
+                        command=lambda: self._axis_toggled("t")).pack(side=tk.LEFT)
+        ttk.Label(bar, text="Min").pack(side=tk.LEFT, padx=(4, 2))
+        self.sp_tmin = spin(self.var_tmin, from_=T_AXIS_RANGE[0], to=T_AXIS_RANGE[1],
+                            increment=T_AXIS_STEP, format="%.1f")
+        self.sp_tmin.pack(side=tk.LEFT)
+        ttk.Label(bar, text="Max").pack(side=tk.LEFT, padx=(6, 2))
+        self.sp_tmax = spin(self.var_tmax, from_=T_AXIS_RANGE[0], to=T_AXIS_RANGE[1],
+                            increment=T_AXIS_STEP, format="%.1f")
+        self.sp_tmax.pack(side=tk.LEFT)
+        ttk.Label(bar, text=f"{DEG}C").pack(side=tk.LEFT, padx=(3, 18))
+
+        ttk.Checkbutton(bar, text="Activity", variable=self.var_axa,
+                        command=lambda: self._axis_toggled("a")).pack(side=tk.LEFT)
+        ttk.Label(bar, text="Min").pack(side=tk.LEFT, padx=(4, 2))
+        self.sp_amin = spin(self.var_amin, from_=0, to=1, increment=1)
+        self.sp_amin.pack(side=tk.LEFT)
+        ttk.Label(bar, text="Max").pack(side=tk.LEFT, padx=(6, 2))
+        self.sp_amax = spin(self.var_amax, from_=0, to=1, increment=1)
+        self.sp_amax.pack(side=tk.LEFT)
+        self.a_hint = tk.StringVar(value="(range and step set after calculating)")
+        ttk.Label(bar, textvariable=self.a_hint, foreground="#5F6670").pack(side=tk.LEFT, padx=(6, 0))
+        return bar
+
     def _build_output(self):
-        right = ttk.Frame(self, padding=(0, 8, 8, 8))
+        right = ttk.Frame(self, padding=(0, 6, 8, 6))
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        self.notice = ttk.Label(right, text=NOTICE_DEMO, wraplength=820, padding=8,
+        self.notice = ttk.Label(right, text=NOTICE_DEMO, wraplength=860, padding=(8, 4),
                                 background="#EEF0F3", foreground="#1B1F24")
+        self.axbar = self._build_axis_bar(right)
+        self.axbar.pack(side=tk.BOTTOM, fill=tk.X, pady=(4, 0))   # below the plots
         self.nb = ttk.Notebook(right)
         self.nb.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
@@ -950,7 +955,7 @@ class Q10App(tk.Tk):
         self.var_axt.set(False); self.var_axa.set(False)
         for v in (self.var_tmin, self.var_tmax, self.var_amin, self.var_amax):
             v.set("")
-        self.a_hint.set("Range and step are set from the data after calculating.")
+        self.a_hint.set("(range and step set after calculating)")
         self.txt_res.delete("1.0", tk.END)
         for p in self.plots:
             p["fig"].clear()
@@ -1060,8 +1065,7 @@ class Q10App(tk.Tk):
         fmt = f"%.{s['dec']}f"
         for sp in (self.sp_amin, self.sp_amax):
             sp.configure(from_=0, to=s["limit"], increment=s["step"], format=fmt)
-        self.a_hint.set(f"Range 0–{s['limit']:.{s['dec']}f} (100 \u00D7 data max {max_a:.6g}), "
-                        f"step {s['step']:.{s['dec']}f} (set from the data)")
+        self.a_hint.set(f"(0–{s['limit']:.{s['dec']}f}, step {s['step']:.{s['dec']}f})")
         if self.var_axa.get():
             lo, hi = self._float(self.var_amin), self._float(self.var_amax)
             lo = min(max(lo if lo is not None else 0.0, 0.0), s["limit"])

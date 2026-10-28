@@ -70,65 +70,83 @@
 }
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
-.app{display:grid;grid-template-columns:minmax(310px,370px) 1fr;gap:20px;max-width:1420px;margin:0 auto;padding:20px}
-@media (max-width:900px){.app{grid-template-columns:1fr;padding:12px;gap:12px}}
-h1{font-size:1.35rem;line-height:1.2;margin:0 0 2px;font-weight:700}
-.sub{color:var(--muted);margin:0 0 16px;font-size:.88rem}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
-fieldset{border:0;border-top:1px solid var(--line);margin:14px 0 0;padding:12px 0 0;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans)}
+/* Two columns that fit a 900 px tall window; the plot takes the remaining height. */
+.app{display:grid;grid-template-columns:minmax(330px,360px) 1fr;gap:14px;max-width:1500px;margin:0 auto;padding:12px}
+@media (min-width:901px) and (min-height:640px){
+  .app{height:100vh;height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px))}
+  .panel{overflow-y:auto;display:flex;flex-direction:column}
+  .panel .grow{flex:1;min-height:150px;display:flex;flex-direction:column}
+  .panel .grow textarea{flex:1;height:auto;min-height:90px;resize:none}
+  .out{min-height:0}
+  .view{flex:1;min-height:0;display:flex;flex-direction:column}
+  .plot{flex:1;min-height:0}
+  .plot svg{height:100%}
+  pre.report{max-height:none;flex:1}
+}
+@media (max-width:900px){.app{grid-template-columns:1fr;padding:10px;gap:10px}}
+h1{font-size:1.02rem;line-height:1.25;margin:0 0 10px;font-weight:700}
+.sub{color:var(--muted);margin:0 0 10px;font-size:.8rem}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+fieldset{border:0;border-top:1px solid var(--line);margin:9px 0 0;padding:8px 0 0;min-width:0}
 fieldset:first-of-type{border-top:0;margin-top:0;padding-top:0}
-legend{font-weight:600;font-size:.92rem;padding:0;margin-bottom:6px}
-label{font-size:.88rem}
-.hint{color:var(--muted);font-size:.8rem;margin:0 0 6px}
+legend{font-weight:600;font-size:.86rem;padding:0;margin-bottom:4px;float:left;width:100%}
+legend + *{clear:both}
+label{font-size:.84rem}
+.hint{color:var(--muted);font-size:.76rem;margin:0 0 4px}
 input[type=text],input[type=number],select,textarea{
-  width:100%;font:inherit;color:var(--ink);background:var(--field);
-  border:1px solid var(--line);border-radius:6px;padding:7px 9px}
-input[type=number]{width:7.5em}
-textarea{font:13px/1.55 var(--mono);resize:vertical;min-height:160px;height:260px;white-space:pre;overflow:auto}
+  width:100%;font:inherit;font-size:.86rem;color:var(--ink);background:var(--field);
+  border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+input[type=number]{width:6.6em}
+textarea{font:12.5px/1.5 var(--mono);resize:vertical;min-height:110px;height:190px;white-space:pre;overflow:auto}
 input:disabled,select:disabled{opacity:.45}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.row + .row{margin-top:8px}
-.check{display:flex;gap:8px;align-items:center}
-.axis + .axis{margin-top:12px}
-.axis .row{margin-top:6px}
-.axis .hint{margin:4px 0 0}
-button{font:inherit;font-size:.88rem;border-radius:6px;border:1px solid var(--line);background:var(--field);color:var(--ink);padding:6px 12px;cursor:pointer}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.check{display:flex;gap:6px;align-items:center}
+@media (min-width:901px){.row.nw{flex-wrap:nowrap}}
+@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}.axes .grp{flex-wrap:wrap;white-space:normal}}
+button{white-space:nowrap;font:inherit;font-size:.82rem;border-radius:6px;border:1px solid var(--line);background:var(--field);color:var(--ink);padding:4px 10px;cursor:pointer}
 button:hover{border-color:var(--axis)}
 button:disabled{opacity:.45;cursor:not-allowed}
-button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;width:100%;padding:10px;font-size:.95rem}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;width:100%;padding:7px;font-size:.92rem}
 button.primary:hover{filter:brightness(1.08)}
-kbd{font:11px var(--mono);opacity:.75;margin-left:4px}
-.status{margin-top:10px;font-size:.84rem;color:var(--muted);min-height:1.3em}
-.status.error{background:var(--err-bg);color:var(--err);padding:8px 10px;border-radius:6px}
-.out{display:flex;flex-direction:column;gap:14px;min-width:0}
-.readout{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden}
-.readout div{padding:12px 14px;border-left:1px solid var(--line);min-width:0}
+kbd{font:10.5px var(--mono);opacity:.75;margin-left:4px}
+.status{margin-top:6px;font-size:.78rem;color:var(--muted);min-height:1.3em}
+.status.error{background:var(--err-bg);color:var(--err);padding:6px 8px;border-radius:6px}
+.out{display:flex;flex-direction:column;gap:8px;min-width:0}
+.readout{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden;flex:none;margin:0}
+.readout div{padding:6px 12px;border-left:1px solid var(--line);min-width:0}
 .readout div:first-child{border-left:0}
-.readout dt{font-size:.8rem;color:var(--muted)}
-.readout dd{margin:0;font-size:1.4rem;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.25;overflow-wrap:anywhere}
-.readout dd small{font-size:.78rem;font-weight:400;color:var(--muted);margin-left:4px}
+.readout dt{font-size:.74rem;color:var(--muted)}
+.readout dd{margin:0;font-size:1.15rem;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.25;overflow-wrap:anywhere}
+.readout dd small{font-size:.72rem;font-weight:400;color:var(--muted);margin-left:4px}
 @media (max-width:760px){.readout{grid-template-columns:1fr 1fr}.readout div{border-left:0;border-top:1px solid var(--line)}.readout div:first-child{grid-column:1/-1;border-top:0}.readout div:nth-child(odd):not(:first-child){border-left:1px solid var(--line)}}
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
-.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:8px 14px;color:var(--muted);font-weight:500;white-space:nowrap}
+.bar{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);flex:none}
+.tabs{display:flex;gap:2px;overflow-x:auto}
+.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:6px 12px;color:var(--muted);font-weight:500;white-space:nowrap;font-size:.86rem}
 .tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
-.view{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
-@media (max-width:620px){.view{padding:10px}}
-.figtitle{text-align:center;font-weight:600;font-size:1.15rem;margin:0}
-.figsum{text-align:center;color:var(--muted);font-size:.86rem;margin:2px 0 8px;font-variant-numeric:tabular-nums}
-.plot svg{width:100%;height:auto;display:block;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.saves{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:5px}
+/* Axis scales: one compact row below the plot */
+.axes{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 12px;flex:none}
+.axes .ttl{font-weight:600;font-size:.84rem}
+.axes .grp{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.axes input[type=number]{width:5em}
+.axes .hint{margin:0 0 0 2px;font-size:.74rem}
+.view{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+@media (max-width:620px){.view{padding:8px}}
+.figtitle{text-align:center;font-weight:600;font-size:1.05rem;margin:0;flex:none}
+.figsum{text-align:center;color:var(--muted);font-size:.8rem;margin:0 0 4px;font-variant-numeric:tabular-nums;flex:none;line-height:1.35}
+.plot svg{width:100%;display:block;touch-action:pan-y;user-select:none;-webkit-user-select:none}
 .plot svg.selecting{cursor:ew-resize}
-.plothint{text-align:center;color:var(--muted);font-size:.8rem;margin:6px 0 0}
-.empty{display:grid;place-items:center;min-height:380px;color:var(--muted);text-align:center;font-size:.92rem}
+.plothint{text-align:center;color:var(--muted);font-size:.74rem;margin:2px 0 0;flex:none}
+.empty{display:grid;place-items:center;min-height:300px;flex:1;color:var(--muted);text-align:center;font-size:.9rem}
 .empty p{max-width:34ch;margin:0}
-pre.report{font:12.5px/1.55 var(--mono);margin:0;overflow:auto;max-height:70vh;white-space:pre}
-.saves{display:flex;gap:8px;flex-wrap:wrap}
+pre.report{font:12px/1.5 var(--mono);margin:0;overflow:auto;max-height:70vh;white-space:pre}
 [hidden]{display:none!important}
-.demo{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px;font-size:.9rem}
+.demo{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:6px 12px;font-size:.82rem;flex:none}
 .demo p{margin:0}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-details.help{font-size:.86rem;color:var(--muted)}
+details.help{font-size:.8rem;color:var(--muted)}
 details.help summary{cursor:pointer;color:var(--ink);font-weight:500}
 details.help p{margin:.5em 0}
 </style>
@@ -136,75 +154,53 @@ details.help p{margin:.5em 0}
 <body>
 <div class="app">
 <aside class="panel" aria-label="Inputs">
-  <h1>Q<sub>10</sub> calculator: temperature vs. activity</h1>
-  <p class="sub">Fits A(T) = A<sub>b</sub> · Q<sub>10</sub><sup>(T − T<sub>b</sub>)/10</sup> to temperature and activity data.</p>
+  <h1 title="Fits A(T) = A_b · Q10^((T − T_b)/10) to temperature and activity data">Q<sub>10</sub> calculator: temperature vs. activity</h1>
 
   <fieldset>
     <legend><label for="title">Plot title</label></legend>
     <input id="title" type="text" placeholder="Optional">
   </fieldset>
 
-  <fieldset>
+  <fieldset class="grow">
     <legend><label for="data">Data, one pair per line</label></legend>
-    <p class="hint">Temperature (°C) and activity, separated by comma, space or tab. A header line and lines starting with # are skipped.</p>
+    <p class="hint" title="A header line and lines starting with # are skipped.">Temperature (°C) and activity; comma, space or tab separated.</p>
     <textarea id="data" spellcheck="false"></textarea>
-    <div class="row" style="margin-top:8px">
+    <div class="row" style="margin-top:6px">
       <button type="button" id="btn-csv">Load CSV…</button>
       <button type="button" id="btn-example">Load example</button>
       <button type="button" id="btn-clear">Clear</button>
       <input type="file" id="file" accept=".csv,.tsv,.txt,text/csv,text/plain" class="sr" tabindex="-1">
     </div>
-    <div class="row" style="margin-top:10px">
+    <div class="row" style="margin-top:6px">
       <label for="unit" style="white-space:nowrap">Activity unit</label>
       <input id="unit" type="text" placeholder="e.g. U/mg, RLU, a.u." style="flex:1;width:auto">
     </div>
   </fieldset>
 
   <fieldset>
+    <legend><label for="base">Base temperature</label></legend>
+    <div class="row nw">
+      <select id="base" style="flex:1;width:auto;min-width:0"></select>
+      <label for="custom">Custom</label><input id="custom" type="number" step="0.1" value="25" style="width:4.6em"><span>°C</span>
+    </div>
+    <div style="margin-top:8px"><button type="button" class="primary" id="btn-run">Calculate <kbd>Ctrl+Enter</kbd></button></div>
+    <div class="status" id="status" role="status" aria-live="polite">Ready.</div>
+  </fieldset>
+
+  <fieldset>
     <legend>Temperature range for the fit</legend>
     <label class="check"><input type="checkbox" id="use-range"> Use only data within a temperature range</label>
-    <div class="row" style="margin-top:8px">
-      <label for="low">Low</label><input id="low" type="number" step="0.1" value="15">
-      <label for="high">High</label><input id="high" type="number" step="0.1" value="35"><span>°C</span>
+    <div class="row nw" style="margin-top:5px">
+      <label for="low">Low</label><input id="low" type="number" step="0.1" value="15" style="width:4.6em">
+      <label for="high">High</label><input id="high" type="number" step="0.1" value="35" style="width:4.6em"><span>°C</span>
       <button type="button" id="btn-all">Use all data</button>
     </div>
-    <p class="hint" style="margin-top:6px">After calculating, you can also drag across any plot to choose the range; double-click a plot to use all data again.</p>
+    <p class="hint" style="margin-top:4px">Or drag across a plot; double-click a plot to use all data.</p>
   </fieldset>
 
   <fieldset>
-    <legend><label for="base">Base temperature</label></legend>
-    <select id="base"></select>
-    <div class="row" style="margin-top:8px">
-      <label for="custom">Custom value</label><input id="custom" type="number" step="0.1" value="25"><span>°C</span>
-    </div>
-  </fieldset>
-
-  <fieldset>
-    <legend>Axis scales</legend>
-    <p class="hint">Tick an axis to set its range. Press Enter, click the arrows or move to another field to apply; untick to return to automatic scaling.</p>
-    <div class="axis">
-      <label class="check"><input type="checkbox" id="ax-t"> Temperature</label>
-      <div class="row">
-        <label for="tmin">Min</label><input id="tmin" type="number" min="0" max="100" step="0.5">
-        <label for="tmax">Max</label><input id="tmax" type="number" min="0" max="100" step="0.5"><span>°C</span>
-      </div>
-      <p class="hint">Range 0–100 °C, step 0.5 °C. The Arrhenius x axis is converted to 1000/T.</p>
-    </div>
-    <div class="axis">
-      <label class="check"><input type="checkbox" id="ax-a"> Activity</label>
-      <div class="row">
-        <label for="amin">Min</label><input id="amin" type="number" min="0">
-        <label for="amax">Max</label><input id="amax" type="number" min="0">
-      </div>
-      <p class="hint" id="a-hint">Range and step are set from the data after calculating.</p>
-    </div>
-  </fieldset>
-
-  <fieldset>
-    <label class="check"><input type="checkbox" id="show-arr" checked> Show Arrhenius regression line on the Arrhenius plot</label>
-    <label class="check" style="margin-top:4px"><input type="checkbox" id="tabdelim"> Also show tab-delimited data in the report</label>
-    <div style="margin-top:12px"><button type="button" class="primary" id="btn-run">Calculate <kbd>Ctrl+Enter</kbd></button></div>
-    <div class="status" id="status" role="status" aria-live="polite">Ready.</div>
+    <label class="check"><input type="checkbox" id="show-arr" checked> Show Arrhenius regression line</label>
+    <label class="check" style="margin-top:2px"><input type="checkbox" id="tabdelim"> Also show tab-delimited data in the report</label>
   </fieldset>
 
   <fieldset>
@@ -213,7 +209,7 @@ details.help p{margin:.5em 0}
       <p>The model A(T) = A<sub>b</sub>·Q<sub>10</sub><sup>(T−T<sub>b</sub>)/10</sup> is fitted by non-linear least squares on the activity itself (Levenberg–Marquardt), starting from a straight-line regression of ln(activity) on temperature. Q<sub>10</sub> &gt; 1 means activity rises with temperature.</p>
       <p>The ± values are the square roots of the diagonal of s²(JᵀJ)⁻¹ with s² = SSE/(n−2), the same definition as SciPy’s curve_fit. The base temperature only changes A<sub>b</sub> and its error; Q<sub>10</sub>, R² and the fitted curve stay the same.</p>
       <p>The Arrhenius regression fits ln(activity) against 1000/T (T in kelvin) with a straight line and reports E<sub>a</sub> = −slope × 1000 × R.</p>
-      <p>The activity axis can be set from 0 to 100 × the largest activity in the data. The step of the arrows is the data maximum / 50, rounded to 1, 2 or 5 × 10ⁿ.</p>
+      <p>Axis scales: tick Temperature and/or Activity below the plot and enter Min and Max; press Enter, click the arrows or move to another field to apply. Temperature 0–100 °C (step 0.5 °C); activity 0 to 100 × the largest activity in the data, with the step set to the data maximum / 50 rounded to 1, 2 or 5 × 10ⁿ.</p>
       <p>All calculations run in your browser. The data you enter is not sent or stored.</p>
     </details>
   </fieldset>
@@ -221,7 +217,7 @@ details.help p{margin:.5em 0}
 
 <main class="out">
   <div class="demo" id="demo" role="note" hidden>
-    <p>You’re looking at a demo calculation using example data. To analyse your own data, click <strong>Clear</strong> and enter your temperature and activity pairs in the form.</p>
+    <p>You’re looking at a demo calculation using example data. To analyse your own data, click <strong>Clear</strong> and enter your own pairs.</p>
   </div>
   <dl class="readout" aria-label="Fit summary">
     <div><dt>Q<sub>10</sub></dt><dd id="o-q10">–</dd></div>
@@ -230,17 +226,33 @@ details.help p{margin:.5em 0}
     <div><dt>E<sub>a</sub> (Arrhenius)</dt><dd id="o-ea">–</dd></div>
     <div><dt>Points in fit</dt><dd id="o-n">–</dd></div>
   </dl>
-  <div class="tabs" role="tablist" aria-label="Output">
-    <button role="tab" aria-selected="true" data-tab="activity">Activity</button>
-    <button role="tab" aria-selected="false" data-tab="lnact">ln(Activity)</button>
-    <button role="tab" aria-selected="false" data-tab="arrhenius">Arrhenius</button>
-    <button role="tab" aria-selected="false" data-tab="report">Report</button>
+  <div class="bar">
+    <div class="tabs" role="tablist" aria-label="Output">
+      <button role="tab" aria-selected="true" data-tab="activity">Activity</button>
+      <button role="tab" aria-selected="false" data-tab="lnact">ln(Activity)</button>
+      <button role="tab" aria-selected="false" data-tab="arrhenius">Arrhenius</button>
+      <button role="tab" aria-selected="false" data-tab="report">Report</button>
+    </div>
+    <div class="saves">
+      <button type="button" id="save-png" disabled>Save figure (PNG)</button>
+      <button type="button" id="save-svg" disabled>Save figure (SVG)</button>
+      <button type="button" id="save-txt" disabled>Save report (TXT)</button>
+    </div>
   </div>
   <section class="view" id="view" role="tabpanel"></section>
-  <div class="saves">
-    <button type="button" id="save-png" disabled>Save figure (PNG)</button>
-    <button type="button" id="save-svg" disabled>Save figure (SVG)</button>
-    <button type="button" id="save-txt" disabled>Save report (TXT)</button>
+  <div class="axes" role="group" aria-label="Axis scales">
+    <span class="ttl" title="Tick an axis, enter Min and Max, then press Enter or leave the field. Untick to return to automatic scaling.">Axis scales</span>
+    <span class="grp">
+      <label class="check"><input type="checkbox" id="ax-t"> Temperature</label>
+      <label for="tmin">Min</label><input id="tmin" type="number" min="0" max="100" step="0.5">
+      <label for="tmax">Max</label><input id="tmax" type="number" min="0" max="100" step="0.5"><span>°C</span>
+    </span>
+    <span class="grp">
+      <label class="check"><input type="checkbox" id="ax-a"> Activity</label>
+      <label for="amin">Min</label><input id="amin" type="number" min="0">
+      <label for="amax">Max</label><input id="amax" type="number" min="0">
+  <span class="hint" id="a-hint" title="Temperature: 0–100 °C, step 0.5 °C (the Arrhenius x axis is converted to 1000/T). Press Enter, click the arrows or leave the field to apply.">set after calculating</span>
+    </span>
   </div>
 </main>
 </div>
@@ -482,8 +494,11 @@ function applyAxes(kind, L, axes) {
 }
 
 let clipSeq = 0;
+// Plot margins (SVG units) and the default aspect ratio of the plot area: width 4 : height 3.
+const PLOT_M = { l: 76, r: 18, t: 38, b: 56 }, PLOT_ASPECT = 3 / 4;
+const heightFor = W => Math.round((W - PLOT_M.l - PLOT_M.r) * PLOT_ASPECT) + PLOT_M.t + PLOT_M.b;
 function plotSVG(kind, r, c, W, H, ox = 0, oy = 0, standalone = false, o = {}) {
-  const P = PLOTS[kind], m = { l: 76, r: 18, t: 38, b: 56 }, pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const P = PLOTS[kind], m = PLOT_M, pw = W - m.l - m.r, ph = H - m.t - m.b;
   const L = applyAxes(kind, autoLimits(kind, r, o.showArr), o.axes);
   if (o.geom) Object.assign(o.geom, { kind, W, H, left: ox + m.l, top: oy + m.t, pw, ph, x0: L.x0, x1: L.x1 });
   const sx = v => ox + m.l + (v - L.x0) / (L.x1 - L.x0) * pw, sy = v => oy + m.t + ph - (v - L.y0) / (L.y1 - L.y0) * ph;
@@ -534,7 +549,7 @@ function plotSVG(kind, r, c, W, H, ox = 0, oy = 0, standalone = false, o = {}) {
   return s;
 }
 function combinedSVG(r, title, o) {
-  const W = 800, PH = 560, c = PRINT;
+  const W = 800, PH = heightFor(W), c = PRINT;
   let y = 20, head = "";
   if (title) { head += `<text x="${W / 2}" y="${y + 20}" text-anchor="middle" font-size="22" font-weight="600" fill="${c.ink}">${esc(title)}</text>`; y += 42; }
   summaryLines(r).forEach(l => { head += `<text x="${W / 2}" y="${y + 14}" text-anchor="middle" font-size="14" fill="${c.ink}">${esc(l)}</text>`; y += 20; });
@@ -568,7 +583,7 @@ function configureAScale(maxA) {
   Object.assign(aScale, { max: maxA, step, dec });
   aScale.limit = +(Math.floor(A_FACTOR * maxA / step + 1e-9) * step).toFixed(dec);
   [els.amin, els.amax].forEach(i => { i.min = 0; i.max = aScale.limit; i.step = step; });
-  els.aHint.textContent = `Range 0–${fmtA(aScale.limit)} (100 × data max ${+maxA.toPrecision(6)}), step ${fmtA(step)} (set from the data).`;
+  els.aHint.textContent = `0–${fmtA(aScale.limit)}, step ${fmtA(step)}`;
   if (els.axA.checked) {
     let lo = clampA(parseFloat(els.amin.value)), hi = clampA(parseFloat(els.amax.value));
     if (!(hi > lo)) [lo, hi] = defaultA();
@@ -609,17 +624,25 @@ function readAxes() {
 }
 const plotOpts = () => ({ axes: readAxes(), showArr: els.showArr.checked });
 
-function plotSize() { const w = els.view.clientWidth; return w < 560 ? [440, 370] : [700, 480]; }
+// Plot size in SVG units: the plot area is 4:3 (width:height). The SVG keeps this ratio
+// when it is scaled into the space left in the window (it is centred, never stretched).
+function plotSize(box) {
+  const w = box.clientWidth || els.view.clientWidth, W = w < 560 ? 440 : 600;
+  return [W, heightFor(W)];
+}
 function render() {
   document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === current));
   if (!result) { els.view.innerHTML = `<div class="empty"><p>Paste temperature and activity pairs, or load the example, then calculate.</p></div>`; return; }
   if (current === "report") { els.view.innerHTML = `<pre class="report"></pre>`; els.view.firstChild.textContent = reportText(result, els.tab.checked); return; }
   const o = { ...plotOpts(), band: true, geom: plotGeom };
-  const t = els.title.value.trim(), [l1, l2] = summaryLines(result), [W, H] = plotSize();
-  els.view.innerHTML = (t ? `<p class="figtitle"></p>` : "") + `<p class="figsum">${esc(l1)}<br>${esc(l2)}</p><div class="plot">${plotSVG(current, result, SCREEN, W, H, 0, 0, true, o)}</div>`;
+  const t = els.title.value.trim(), [l1, l2] = summaryLines(result);
+  els.view.innerHTML = (t ? `<p class="figtitle"></p>` : "") + `<p class="figsum">${esc(l1)}<br>${esc(l2)}</p><div class="plot"></div>` +
+    `<p class="plothint">Drag across the plot to fit only that temperature range. Double-click to use all data.</p>`;
   if (t) els.view.querySelector(".figtitle").textContent = t;
-  els.view.insertAdjacentHTML("beforeend", `<p class="plothint">Drag across the plot to fit only that temperature range. Double-click to use all data.</p>`);
-  attachRangeSelect(els.view.querySelector(".plot svg"));
+  const box = els.view.querySelector(".plot"), [W, H] = plotSize(box);
+  lastSize = box.clientWidth + "x" + box.clientHeight;
+  box.innerHTML = plotSVG(current, result, SCREEN, W, H, 0, 0, true, o);
+  attachRangeSelect(box.querySelector("svg"));
 }
 
 /* ---- Drag-to-select the fit range on a plot ----
@@ -633,7 +656,11 @@ const X_TO_T = { activity: v => v, lnact: v => v, arrhenius: v => 1000 / v - 273
 function attachRangeSelect(svg) {
   if (!svg) return;
   const g = plotGeom, NS = "http://www.w3.org/2000/svg";
-  const toSvg = e => { const b = svg.getBoundingClientRect(); return [(e.clientX - b.left) * g.W / b.width, (e.clientY - b.top) * g.H / b.height]; };
+  const toSvg = e => {   // screen -> SVG units (handles scaling and letterboxing)
+    const m = svg.getScreenCTM(); if (!m) return [-1, -1];
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const q = pt.matrixTransform(m.inverse()); return [q.x, q.y];
+  };
   const inside = ([x, y]) => x >= g.left && x <= g.left + g.pw && y >= g.top && y <= g.top + g.ph;
   const clampX = x => Math.min(Math.max(x, g.left), g.left + g.pw);
   let start = null, band = null;
@@ -687,8 +714,14 @@ function applyAxisFields() {
   else setStatus("Axis scales applied.");
   render();
 }
-let lastW = 0;
-window.addEventListener("resize", () => { const w = plotSize()[0]; if (w !== lastW) { lastW = w; if (result && current !== "report") render(); } });
+let lastSize = "", resizeJob = 0;
+window.addEventListener("resize", () => {
+  cancelAnimationFrame(resizeJob);
+  resizeJob = requestAnimationFrame(() => {
+    const box = els.view.querySelector(".plot");
+    if (result && current !== "report" && box && box.clientWidth + "x" + box.clientHeight !== lastSize) render();
+  });
+});
 
 function updateReadout() {
   const r = result, u = unitStr();
@@ -721,7 +754,7 @@ function clearAll() {
   hideDemo(); els.data.value = ""; els.title.value = ""; els.unit.value = ""; result = null;
   els.axT.checked = els.axA.checked = false;
   [els.tmin, els.tmax, els.amin, els.amax].forEach(i => i.value = "");
-  els.aHint.textContent = "Range and step are set from the data after calculating.";
+  els.aHint.textContent = "set after calculating";
   toggleStates(); updateReadout(); render(); setStatus("Cleared.");
 }
 function loadCSVText(text, name) {
